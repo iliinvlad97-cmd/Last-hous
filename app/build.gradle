@@ -1,5 +1,5 @@
 plugins { id 'com.android.application' }
 
 android { namespace 'com.lastdom.game'; compileSdk 36
-    defaultConfig { applicationId 'com.lastdom.game'; minSdk 24; targetSdk 36; versionCode 6; versionName '0.6.0' }
+    defaultConfig { applicationId 'com.lastdom.game'; minSdk 24; targetSdk 36; versionCode 7; versionName '0.7.0' }
 }
