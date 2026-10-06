@@ -50,8 +50,22 @@ public class MainActivity extends Activity {
                 c.drawBitmap(shelterBitmap,src,dst,p);
             }
             drawResources(c);
+            drawResidentMarkers(c);
             drawPeople(c,455);
             drawNav(c);
+        }
+
+        void drawResidentMarkers(Canvas c){
+            // Visual residents overlay for Interactive Residents stage
+            String[] icons={"И","М","С","А","П"};
+            float[][] pos={{95,210},{300,300},{340,150},{120,330},{250,240}};
+            for(int i=0;i<Math.min(people.size(),pos.length);i++){
+                Survivor s=people.get(i);
+                if(!s.alive) continue;
+                box(c,pos[i][0]-16,pos[i][1]-28,pos[i][0]+16,pos[i][1]+8,Color.rgb(55,58,62),16);
+                bold(c,icons[i],pos[i][0]-5,pos[i][1]-5,12,accent);
+                txt(c,s.name,pos[i][0]-22,pos[i][1]+25,8,text);
+            }
         }
         void drawResources(Canvas c){String[] n={"Еда","Вода","Энергия","Материалы"};int[] v={food,water,power,mats};String[] ic={"F","W","E","M"};for(int i=0;i<4;i++){float x=14+i*101;box(c,x,66,x+94,110,Color.rgb(24,29,34),9);p.setColor(i==0?Color.rgb(199,157,101):i==1?Color.rgb(78,145,184):i==2?Color.rgb(225,159,59):Color.rgb(142,149,151));c.drawCircle(sy(x+16),sy(88),sy(10),p);bold(c,ic[i],x+12,92,8,Color.WHITE);txt(c,n[i],x+30,81,7,muted);bold(c,""+v[i],x+30,101,12,text);}}
         int sky(){int h=gameMinute/60;if(h>=6&&h<12)return Color.rgb(78,75,70);if(h<18)return Color.rgb(72,82,88);if(h<22)return Color.rgb(66,47,51);return Color.rgb(18,23,34);}
