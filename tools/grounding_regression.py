@@ -145,6 +145,8 @@ def main():
         # The full old visual comparison intentionally differs after this fix. Keep all gameplay
         # assertions, compare saves/state, and exclude only visual coordinates/Canvas output.
         gameplay_probe = original_probe.replace("residentX residentY residentVisualRoom residentVisualReady ", "")
+        # Stage 1 retains the HOME tab; the old map used any footer tap as Back.
+        gameplay_probe = gameplay_probe.replace('tap(200,810);require', 'tap(50,810);require')
         gameplay_probe = gameplay_probe.replace('if(m.getName().equals(name)){', 'if(m.getName().equals(name)&&m.getParameterCount()==args.length){')
         gameplay_probe = gameplay_probe.replace('System.out.println(label+":"+hash(c.commands.toString()));', '')
         gameplay_probe = gameplay_probe.replace('System.out.println("hitbox-grid-"+height+":"+hash(grid.toString()));', '')

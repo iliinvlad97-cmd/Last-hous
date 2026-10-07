@@ -53,8 +53,18 @@ final class HudRenderer {
     };
     for (int i = 0; i < 5; i++) {
       float x = 18 + i * 77;
+      if (view.game.screen == GameView.CITY_MAP && i == 2)
+        view.box(c, x + 2, y + 4, x + 73, y + 46, Color.rgb(48, 58, 65), 9);
       if (i == 4) view.box(c, x + 2, y + 4, x + 73, y + 46, view.accent, 9);
-      view.bold(c, n[i], x + 7, y + 30, 8, i == 4 ? Color.rgb(30, 27, 23) : view.text);
+      view.bold(
+          c,
+          n[i],
+          x + 7,
+          y + 30,
+          8,
+          i == 4
+              ? Color.rgb(30, 27, 23)
+              : view.game.screen == GameView.CITY_MAP && i == 2 ? view.accent : view.text);
     }
   }
 

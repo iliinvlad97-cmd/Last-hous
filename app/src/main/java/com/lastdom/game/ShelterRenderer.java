@@ -12,7 +12,7 @@ final class ShelterRenderer {
   }
 
   void drawMain(Canvas c) {
-    view.hudRenderer.drawHeader(c, "убежище • v0.9.5.4 HITBOX + FLOOR FIX");
+    view.hudRenderer.drawHeader(c, GameView.VERSION_LABEL);
     view.hudRenderer.drawResources(c);
 
     // v0.9.5.1: one continuous world image. No old shelter layer and no separate city strip.

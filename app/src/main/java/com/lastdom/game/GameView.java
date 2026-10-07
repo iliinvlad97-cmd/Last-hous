@@ -7,6 +7,8 @@ import android.view.*;
 
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
+  static final int HOME = 0, CITY_MAP = 5;
+  static final String VERSION_LABEL = "v0.9.6 • CITY MAP • STAGE 1";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -37,6 +39,8 @@ public final class GameView extends View {
   final ResidentRenderer residentRenderer = new ResidentRenderer(this);
   final HudRenderer hudRenderer = new HudRenderer(this);
   final OverlayRenderer overlayRenderer = new OverlayRenderer(this);
+  final CityMapController cityMap = new CityMapController();
+  final CityMapRenderer cityMapRenderer = new CityMapRenderer(this);
 
   public GameView(Context context) {
     super(context);
@@ -121,6 +125,46 @@ public final class GameView extends View {
     if (i < 0 || i >= Math.min(5, game.people.size())) return -1;
     float local = x - (left + i * step);
     return local <= 72 ? i : -1;
+  }
+
+  private void openCityMap() {
+    cityMap.closeSelection();
+    game.screen = CITY_MAP;
+    game.overlay = 0;
+    invalidate();
+  }
+
+  private boolean navigate(float x, float y, float logicalHeight) {
+    if (y <= logicalHeight - 78) return false;
+    int index = (int) ((x - 18) / 77);
+    if (index == 0) {
+      game.screen = HOME;
+      game.overlay = 0;
+      cityMap.closeSelection();
+    } else if (index == 1) {
+      game.screen = 2;
+      game.overlay = 0;
+      cityMap.closeSelection();
+    } else if (index == 2) {
+      openCityMap();
+    } else if (index == 3) {
+      game.screen = HOME;
+      game.overlay = 3;
+      cityMap.closeSelection();
+    } else if (index == 4) {
+      if (game.paused) {
+        game.paused = false;
+        game.speed = 1;
+      } else if (game.speed == 1) game.speed = 2;
+      else if (game.speed == 2) game.speed = 4;
+      else {
+        game.paused = true;
+        game.speed = 1;
+      }
+      game.save();
+    }
+    invalidate();
+    return true;
   }
 
   @Override
@@ -230,9 +274,7 @@ public final class GameView extends View {
         return true;
       }
       if (y >= sceneTop + sceneH * .08f && y <= sceneTop + sceneH * .27f && x >= 145 && x <= 275) {
-        game.screen = 5;
-        game.overlay = 0;
-        invalidate();
+        openCityMap();
         return true;
       }
       int ri = ShelterGeometry.fullSceneRoomAt(x, y, sceneTop, sceneBottom);
@@ -242,59 +284,22 @@ public final class GameView extends View {
         invalidate();
         return true;
       }
-      if (y > hh - 78) {
-        int i = (int) ((x - 18) / 77);
-        if (i == 0) {
-          game.overlay = 0;
-        } else if (i == 1) {
-          game.screen = 2;
-          game.overlay = 0;
-        } else if (i == 2) {
-          game.screen = 5;
-          game.overlay = 0;
-        } else if (i == 3) {
-          game.overlay = 3;
-        } else if (i == 4) {
-          if (game.paused) {
-            game.paused = false;
-            game.speed = 1;
-          } else if (game.speed == 1) game.speed = 2;
-          else if (game.speed == 2) game.speed = 4;
-          else {
-            game.paused = true;
-            game.speed = 1;
-          }
-          game.save();
-        }
-        invalidate();
-      }
+      navigate(x, y, hh);
     } else if (game.screen == 2) {
       if (y > hh - 80) {
         game.screen = 0;
         invalidate();
       }
-    } else if (game.screen == 5) {
-      if (y > hh - 80) {
-        game.screen = 0;
-        invalidate();
-      } else {
-        float top = 68;
-        float[][] pos = {
-          {90, top + 78},
-          {315, top + 86},
-          {92, top + 245},
-          {322, top + 235},
-          {132, top + 370},
-          {300, top + 385}
-        };
-        for (int li = 0; li < game.locations.size(); li++) {
-          float dx = x - pos[li][0], dy = y - pos[li][1];
-          if (dx * dx + dy * dy < 1100) {
-            game.startExpedition(li);
-            break;
-          }
-        }
+    } else if (game.screen == CITY_MAP) {
+      CityMapController.TouchResult result = cityMap.onTouch(x, y, new CityMapLayout(hh));
+      if (result == CityMapController.TouchResult.HOME) {
+        game.screen = HOME;
+        game.overlay = 0;
+        cityMap.closeSelection();
+      } else if (result == CityMapController.TouchResult.NONE) {
+        navigate(x, y, hh);
       }
+      invalidate();
     } else {
       game.screen = 0;
       game.overlay = 0;

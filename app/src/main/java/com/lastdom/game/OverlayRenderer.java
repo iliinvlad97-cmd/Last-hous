@@ -162,55 +162,7 @@ final class OverlayRenderer {
   }
 
   void drawMap(Canvas c) {
-    view.hudRenderer.drawHeader(c, "карта разрушенного района");
-    float top = 68, bottom = view.H / view.scale - 82;
-    view.box(c, 18, top, 402, bottom, Color.rgb(31, 34, 35), 14);
-    view.p.setColor(Color.rgb(46, 48, 47));
-    for (int i = 0; i < 8; i++) {
-      float yy = top + 35 + i * 62;
-      c.drawRect(view.sy(25), view.sy(yy), view.sy(395), view.sy(yy + 5), view.p);
-    }
-    for (int i = 0; i < 6; i++) {
-      float xx = 42 + i * 65;
-      c.drawRect(view.sy(xx), view.sy(top + 10), view.sy(xx + 4), view.sy(bottom - 8), view.p);
-    }
-    float hx = 210, hy = top + 150;
-    drawMapNode(c, hx, hy, "ДОМ", true, 0);
-    float[][] pos = {
-      {90, top + 78},
-      {315, top + 86},
-      {92, top + 245},
-      {322, top + 235},
-      {132, top + 370},
-      {300, top + 385}
-    };
-    for (int i = 0; i < view.game.locations.size(); i++) {
-      Location l = view.game.locations.get(i);
-      float x = pos[i][0], y = pos[i][1];
-      view.p.setStrokeWidth(view.sy(2));
-      view.p.setColor(Color.rgb(76, 74, 67));
-      c.drawLine(view.sy(hx), view.sy(hy), view.sy(x), view.sy(y), view.p);
-      drawMapNode(c, x, y, l.discovered ? l.name : "?", l.discovered, l.risk);
-      if (l.discovered) {
-        view.txt(c, l.distance + " км", x - 18, y + 31, 8, view.muted);
-        view.bar(c, x - 30, y + 37, x + 30, 4, l.stock, l.stock < 30 ? view.danger : view.good);
-      }
-    }
-    view.txt(
-        c, "Нажмите на точку, чтобы отправить свободного жителя", 30, bottom - 18, 9, view.muted);
-    if (view.game.expeditionPerson >= 0) {
-      view.box(c, 30, bottom - 70, 390, bottom - 34, view.panel2, 9);
-      view.bold(
-          c,
-          "В ПУТИ • " + view.game.people.get(view.game.expeditionPerson).name,
-          44,
-          bottom - 50,
-          10,
-          view.accent);
-      view.txt(
-          c, view.game.formatBuild(view.game.expeditionRemaining), 320, bottom - 50, 10, view.text);
-    }
-    view.hudRenderer.bottomBack(c);
+    view.cityMapRenderer.draw(c);
   }
 
   void drawMapNode(Canvas c, float x, float y, String name, boolean seen, int risk) {
