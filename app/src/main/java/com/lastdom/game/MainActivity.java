@@ -44,7 +44,7 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();scale=W/420f;c.drawColor(bg);if(screen==0)drawMain(c);else if(screen==1)drawSurvivor(c);else if(screen==2)drawJournal(c);else if(screen==3)drawRooms(c);else if(screen==4)drawRoomDetail(c);else drawMap(c);if(event)drawEvent(c);if(jobMenu)drawJobMenu(c);if(gameOver)drawGameOver(c);}
         void drawHeader(Canvas c,String sub){bold(c,"ПОСЛЕДНИЙ ДОМ",20,30,20,text);txt(c,sub,20,49,11,muted);box(c,250,12,400,52,panel2,9);bold(c,"Д"+day+"  "+clock(),264,31,12,text);txt(c,phase(),264,46,9,phase().equals("НОЧЬ")?blue:accent);}
         void drawMain(Canvas c){
-            drawHeader(c,"убежище • v0.9.5.3 PIXEL ALIGNMENT");
+            drawHeader(c,"убежище • v0.9.5.4 HITBOX + FLOOR FIX");
             drawResources(c);
 
             // v0.9.5.1: one continuous world image. No old shelter layer and no separate city strip.
@@ -91,6 +91,11 @@ public class MainActivity extends Activity {
         }
 
         int fullSceneRoomAt(float x,float y,float top,float bottom){
+            // v0.9.5.4: the artwork has an extra visible upper-right work room.
+            // Treat it as part of the workshop so the whole visible room is interactive.
+            float h=bottom-top;
+            float[] upperRight=sceneRect(.515f,.330f,.930f,.480f,top,h);
+            if(x>=upperRight[0]&&x<=upperRight[2]&&y>=upperRight[1]&&y<=upperRight[3])return 3;
             // Explicit priority prevents a neighbouring room from stealing edge taps.
             int[] order={0,1,2,5,3,4};
             for(int ri:order){float[] q=fullSceneRoomRect(ri,top,bottom);if(x>=q[0]&&x<=q[2]&&y>=q[1]&&y<=q[3])return ri;}
@@ -101,12 +106,12 @@ public class MainActivity extends Activity {
             float h=bottom-top,left=8f,width=404f;
             // Dedicated visual slots per room. They intentionally do not use hitbox centres.
             float[][][] pts={
-                {{.18f,.450f},{.29f,.450f},{.40f,.450f}}, // generator - feet sit on upper-floor line
-                {{.18f,.610f},{.29f,.610f},{.40f,.610f}}, // kitchen
-                {{.62f,.610f},{.73f,.610f},{.84f,.610f}}, // medpoint
-                {{.62f,.775f},{.73f,.775f},{.84f,.775f}}, // workshop/storage lower-right
-                {{.28f,.285f},{.50f,.285f},{.72f,.285f}}, // barricades on surface
-                {{.17f,.775f},{.29f,.775f},{.41f,.775f}}  // bedroom lower-left
+                {{.18f,.475f},{.29f,.475f},{.40f,.475f}}, // generator - feet sit on upper-floor line
+                {{.18f,.635f},{.29f,.635f},{.40f,.635f}}, // kitchen
+                {{.62f,.635f},{.73f,.635f},{.84f,.635f}}, // medpoint
+                {{.62f,.802f},{.73f,.802f},{.84f,.802f}}, // workshop/storage lower-right
+                {{.28f,.310f},{.50f,.310f},{.72f,.310f}}, // barricades on surface
+                {{.17f,.802f},{.29f,.802f},{.41f,.802f}}  // bedroom lower-left
             };
             int k=Math.max(0,Math.min(2,slot));
             return new float[]{left+width*pts[ri][k][0],top+h*pts[ri][k][1]};
