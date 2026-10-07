@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
     static class Location {String name,type;int distance,risk,stock;boolean discovered;Location(String n,String t,int d,int r,int st,boolean seen){name=n;type=t;distance=d;risk=r;stock=st;discovered=seen;}}
 
     class GameView extends View {
-        Paint p=new Paint(3),stroke=new Paint(3); Bitmap shelterBitmap,cityExitBitmap;Random rnd=new Random();Handler timer=new Handler();SharedPreferences sp;
+        Paint p=new Paint(3),stroke=new Paint(3); Bitmap shelterBitmap,fullSceneBitmap;Random rnd=new Random();Handler timer=new Handler();SharedPreferences sp;
         ArrayList<Survivor> people=new ArrayList<>();ArrayList<String> log=new ArrayList<>();ArrayList<Location> locations=new ArrayList<>();
         String[] jobs={"Отдых","Еда","Вода","Материалы","Ремонт","Охрана","Лечение"};
         String[] rooms={"Генераторная","Кухня","Медпункт","Мастерская","Баррикады","Спальня"};
@@ -29,7 +29,7 @@ public class MainActivity extends Activity {
         int W,H;float scale=1f;
         float[] residentX=new float[32],residentY=new float[32]; int[] residentVisualRoom=new int[32]; boolean residentVisualReady=false;
         int bg=Color.rgb(14,16,20),panel=Color.rgb(28,31,37),panel2=Color.rgb(40,44,51),text=Color.rgb(238,234,224),muted=Color.rgb(166,166,160),accent=Color.rgb(213,143,70),danger=Color.rgb(190,72,65),good=Color.rgb(101,160,104),blue=Color.rgb(88,132,166);
-        GameView(Context c){super(c); shelterBitmap=BitmapFactory.decodeResource(getResources(), R.drawable.shelter_clean); cityExitBitmap=BitmapFactory.decodeResource(getResources(), R.drawable.city_exit_top); sp=getSharedPreferences("save_v02",0);initLocations();load();timer.postDelayed(tick,1000);}
+        GameView(Context c){super(c); shelterBitmap=BitmapFactory.decodeResource(getResources(), R.drawable.shelter_clean); fullSceneBitmap=BitmapFactory.decodeResource(getResources(), R.drawable.shelter_full_scene); sp=getSharedPreferences("save_v02",0);initLocations();load();timer.postDelayed(tick,1000);}
         void initLocations(){locations.clear();locations.add(new Location("Продуктовый","еда / вода",2,12,100,true));locations.add(new Location("Аптека","медицина",3,18,100,true));locations.add(new Location("Гаражи","материалы",4,24,100,true));locations.add(new Location("Соседний дом","разное",5,30,100,true));locations.add(new Location("Склад","крупная добыча",7,42,100,false));locations.add(new Location("Больница","редкие припасы",9,55,100,false));}
         Runnable tick=new Runnable(){public void run(){if(!paused&&!gameOver&&!event){for(int i=0;i<speed;i++)advanceMinute();invalidate();}timer.postDelayed(this,1000);}};
         Survivor make(String n,String r,int s){return new Survivor(n,r,s);}void defaults(){people.clear();people.add(make("Иван","Инженер",4));people.add(make("Мария","Врач",4));people.add(make("Сергей","Охрана",4));people.add(make("Анна","Сборщик",3));people.add(make("Павел","Механик",4));}
@@ -44,37 +44,66 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();scale=W/420f;c.drawColor(bg);if(screen==0)drawMain(c);else if(screen==1)drawSurvivor(c);else if(screen==2)drawJournal(c);else if(screen==3)drawRooms(c);else if(screen==4)drawRoomDetail(c);else drawMap(c);if(event)drawEvent(c);if(jobMenu)drawJobMenu(c);if(gameOver)drawGameOver(c);}
         void drawHeader(Canvas c,String sub){bold(c,"ПОСЛЕДНИЙ ДОМ",20,30,20,text);txt(c,sub,20,49,11,muted);box(c,250,12,400,52,panel2,9);bold(c,"Д"+day+"  "+clock(),264,31,12,text);txt(c,phase(),264,46,9,phase().equals("НОЧЬ")?blue:accent);}
         void drawMain(Canvas c){
-            drawHeader(c,"убежище • v0.9.5 ВЫХОД В ГОРОД");
+            drawHeader(c,"убежище • v0.9.5.1 ЕДИНАЯ СЦЕНА");
             drawResources(c);
-            // Surface continuation: the city is physically above the shelter.
-            if(cityExitBitmap!=null){
-                Rect src=new Rect(0,0,cityExitBitmap.getWidth(),cityExitBitmap.getHeight());
-                RectF dst=new RectF(sy(8),sy(116),sy(412),sy(198));
-                c.drawBitmap(cityExitBitmap,src,dst,p);
-            }
-            // Exit is a point in the world, not a UI button.
-            p.setColor(Color.argb(225,255,190,82)); c.drawCircle(sy(210),sy(174),sy(5),p);
-            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(sy(2)); p.setColor(Color.argb(180,255,205,110)); c.drawCircle(sy(210),sy(174),sy(10),p); p.setStyle(Paint.Style.FILL);
-            bold(c,"ВЫХОД В ГОРОД",166,154,9,Color.rgb(244,226,191));
-            Path arrow=new Path(); arrow.moveTo(sy(202),sy(187));arrow.lineTo(sy(210),sy(179));arrow.lineTo(sy(218),sy(187)); c.drawPath(arrow,p);
 
-            // The house is moved lower; resident dock and the old orange city button are gone.
-            c.save(); c.translate(0,sy(50));
-            if(shelterBitmap!=null){
-                Rect src=new Rect(0,0,shelterBitmap.getWidth(),shelterBitmap.getHeight());
-                RectF dst=new RectF(sy(8),sy(118),sy(412),sy(568));
-                c.drawBitmap(shelterBitmap,src,dst,p);
+            // v0.9.5.1: one continuous world image. No old shelter layer and no separate city strip.
+            float hh=H/scale;
+            float sceneTop=116f;
+            float sceneBottom=Math.max(610f,hh-72f);
+            if(fullSceneBitmap!=null){
+                Rect src=new Rect(0,0,fullSceneBitmap.getWidth(),fullSceneBitmap.getHeight());
+                RectF dst=new RectF(sy(8),sy(sceneTop),sy(412),sy(sceneBottom));
+                c.drawBitmap(fullSceneBitmap,src,dst,p);
             }
-            drawTimeOfDayLighting(c);
-            drawDynamicRoomState(c);
-            drawRoomActivityEffects(c);
-            drawEmergencyEffects(c);
-            drawIncidentMarker(c);
-            drawLivingResidentsOverShelter(c);
-            c.restore();
+            // The exit is part of the world. Only an invisible tap target is added here.
+            drawFullSceneState(c,sceneTop,sceneBottom);
+            drawFullSceneResidents(c,sceneTop,sceneBottom);
             drawNav(c);
             if(overlay==1)drawResidentOverlay(c); else if(overlay==2)drawRoomOverlay(c); else if(overlay==3)drawResidentsOverlay(c);
         }
+
+        void drawFullSceneState(Canvas c,float top,float bottom){
+            float h=bottom-top;
+            int hour=gameMinute/60;
+            if(hour>=22||hour<6){p.setColor(Color.argb(52,5,12,28));c.drawRect(sy(8),sy(top),sy(412),sy(bottom),p);}
+            if(power<=0){p.setColor(Color.argb(90,0,3,10));c.drawRect(sy(8),sy(top+h*.23f),sy(412),sy(bottom),p);bold(c,"НЕТ ЭЛЕКТРИЧЕСТВА",142,top+h*.25f,8,danger);}
+            if(incidentRoom>=0){float[] q=fullSceneRoomRect(incidentRoom,top,bottom);float pulse=(float)(.5+.5*Math.sin(System.currentTimeMillis()/220.0));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sy(2));p.setColor(Color.argb((int)(120+100*pulse),235,85,60));c.drawRoundRect(sy(q[0]),sy(q[1]),sy(q[2]),sy(q[3]),sy(7),sy(7),p);p.setStyle(Paint.Style.FILL);}
+        }
+
+        float[] fullSceneRoomRect(int ri,float top,float bottom){
+            float h=bottom-top, l=18, mid=210, r=402;
+            // New art: surface occupies the upper quarter, then three main playable room rows.
+            float y1=top+h*.29f, y2=top+h*.48f, y3=top+h*.67f, y4=top+h*.84f;
+            switch(ri){
+                case 0:return new float[]{l,y1,mid,y2};       // generator
+                case 3:return new float[]{mid,y1,r,y2};       // workshop
+                case 1:return new float[]{l,y2,mid,y3};       // kitchen
+                case 2:return new float[]{mid,y2,r,y3};       // medpoint
+                case 5:return new float[]{l,y3,mid,y4};       // bedroom
+                default:return new float[]{mid,y3,r,y4};      // barricades / armory
+            }
+        }
+
+        int fullSceneRoomAt(float x,float y,float top,float bottom){
+            for(int i=0;i<6;i++){float[] q=fullSceneRoomRect(i,top,bottom);if(x>=q[0]&&x<=q[2]&&y>=q[1]&&y<=q[3])return i;}return -1;
+        }
+
+        float[] fullSceneResidentPos(int ri,int slot,float top,float bottom){
+            float[] q=fullSceneRoomRect(ri,top,bottom);float cx=(q[0]+q[2])/2f+(slot-1)*18f;float cy=q[3]-18f;return new float[]{cx,cy};
+        }
+
+        void drawFullSceneResidents(Canvas c,float top,float bottom){
+            int[] slots={0,0,0,0,0,0};
+            for(int i=0;i<people.size()&&i<32;i++){
+                Survivor s=people.get(i);if(!s.alive||s.job.equals("Экспедиция"))continue;
+                int ri=homeRoomFor(s);if(ri<0)continue;int slot=Math.min(2,slots[ri]++);float[] q=fullSceneResidentPos(ri,slot,top,bottom);
+                residentX[i]=q[0];residentY[i]=q[1];residentVisualRoom[i]=ri;
+                drawDynamicResident(c,s,q[0],q[1],i);
+            }
+            residentVisualReady=true;
+        }
+
 
 
         int homeRoomFor(Survivor s){
@@ -370,9 +399,11 @@ public class MainActivity extends Activity {
             if(jobMenu){float t=110;for(int i=0;i<jobs.length;i++){float yy=t+55+i*45;if(y>=yy&&y<=yy+36){people.get(selected).job=jobs[i];jobMenu=false;overlay=1;addLog(people.get(selected).name+": "+jobs[i]+".");save();invalidate();return true;}}jobMenu=false;invalidate();return true;}
             if(screen==0 && overlay!=0){float top=(overlay==3?Math.max(250,hh-470):overlay==1?Math.max(285,hh-405):Math.max(300,hh-390));if(y<top||x>350&&y<top+55){overlay=0;invalidate();return true;}if(overlay==1){if(y>=top+211&&y<=top+257){jobMenu=true;invalidate();return true;}if(y>=top+266&&y<=top+309&&x<210){people.get(selected).job="Отдых";save();invalidate();return true;}if(y>=top+266&&y<=top+309&&x>=210){overlay=0;invalidate();return true;}}else if(overlay==2){if(y>=top+202&&y<=top+250){startUpgrade(selectedRoom);invalidate();return true;}if(y>=top+259&&y<=top+302&&x<210){int idx=-1;for(int i=0;i<people.size();i++)if(people.get(i).alive){idx=i;break;}if(idx>=0){selected=idx;jobMenu=true;}invalidate();return true;}if(y>=top+259&&y<=top+302&&x>=210){overlay=0;invalidate();return true;}}else if(overlay==3){float yy=top+65;for(int i=0;i<Math.min(6,people.size());i++,yy+=59)if(y>=yy&&y<=yy+52){selected=i;overlay=1;invalidate();return true;}}return true;}
             if(screen==0){
-                if(y>=125&&y<=198&&x>=145&&x<=275){screen=5;overlay=0;invalidate();return true;}
-                int livePerson=shelterResidentAt(x,y-50);if(livePerson>=0){selected=livePerson;overlay=1;invalidate();return true;}
-                int ri=cleanRoomAt(x,y-50);if(ri>=0){selectedRoom=ri;overlay=2;invalidate();return true;}
+                float sceneTop=116f,sceneBottom=Math.max(610f,hh-72f);float sceneH=sceneBottom-sceneTop;
+                if(y>=sceneTop+sceneH*.08f&&y<=sceneTop+sceneH*.27f&&x>=145&&x<=275){screen=5;overlay=0;invalidate();return true;}
+                int livePerson=-1;for(int pi=0;pi<people.size()&&pi<32;pi++){Survivor ps=people.get(pi);if(ps.alive&&!ps.job.equals("Экспедиция")&&x>=residentX[pi]-17&&x<=residentX[pi]+17&&y>=residentY[pi]-28&&y<=residentY[pi]+28){livePerson=pi;break;}}
+                if(livePerson>=0){selected=livePerson;overlay=1;invalidate();return true;}
+                int ri=fullSceneRoomAt(x,y,sceneTop,sceneBottom);if(ri>=0){selectedRoom=ri;overlay=2;invalidate();return true;}
                 if(y>hh-78){int i=(int)((x-18)/77);if(i==0){overlay=0;}else if(i==1){screen=2;overlay=0;}else if(i==2){screen=5;overlay=0;}else if(i==3){overlay=3;}else if(i==4){if(paused){paused=false;speed=1;}else if(speed==1)speed=2;else if(speed==2)speed=4;else{paused=true;speed=1;}save();}invalidate();}
             }else if(screen==2){if(y>hh-80){screen=0;invalidate();}}
             else if(screen==5){if(y>hh-80){screen=0;invalidate();}else{float top=68;float[][] pos={{90,top+78},{315,top+86},{92,top+245},{322,top+235},{132,top+370},{300,top+385}};for(int li=0;li<locations.size();li++){float dx=x-pos[li][0],dy=y-pos[li][1];if(dx*dx+dy*dy<1100){startExpedition(li);break;}}}}
