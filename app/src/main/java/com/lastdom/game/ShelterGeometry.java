@@ -1,12 +1,17 @@
 package com.lastdom.game;
 
-/**
- * Artwork coordinates and legacy geometry copied unchanged. Resident Y conventions are
- * intentionally preserved.
- */
+/** Artwork room hitboxes and resident ground anchors in the existing scene coordinates. */
 final class ShelterGeometry {
 
   private ShelterGeometry() {}
+
+  // Standing floor edges measured in shelter_full_scene.png (941 x 1370), not hitbox centres.
+  // generator, kitchen, medpoint, workshop, surface, bedroom
+  private static final float[] FLOOR_PIXEL_Y = {630f, 860f, 860f, 1088f, 390f, 1088f};
+  private static final float[][] SLOT_X = {
+    {.18f, .29f, .40f}, {.18f, .29f, .40f}, {.62f, .73f, .84f},
+    {.62f, .73f, .84f}, {.28f, .50f, .72f}, {.17f, .29f, .41f}
+  };
 
   static float[] fullSceneRoomRect(int ri, float top, float bottom) {
     float h = bottom - top;
@@ -53,17 +58,18 @@ final class ShelterGeometry {
 
   static float[] fullSceneResidentPos(int ri, int slot, float top, float bottom) {
     float h = bottom - top, left = 8f, width = 404f;
-    // Dedicated visual slots per room. They intentionally do not use hitbox centres.
-    float[][][] pts = {
-      {{.18f, .475f}, {.29f, .475f}, {.40f, .475f}}, // generator - feet sit on upper-floor line
-      {{.18f, .635f}, {.29f, .635f}, {.40f, .635f}}, // kitchen
-      {{.62f, .635f}, {.73f, .635f}, {.84f, .635f}}, // medpoint
-      {{.62f, .802f}, {.73f, .802f}, {.84f, .802f}}, // workshop/storage lower-right
-      {{.28f, .310f}, {.50f, .310f}, {.72f, .310f}}, // barricades on surface
-      {{.17f, .802f}, {.29f, .802f}, {.41f, .802f}} // bedroom lower-left
-    };
     int k = Math.max(0, Math.min(2, slot));
-    return new float[] {left + width * pts[ri][k][0], top + h * pts[ri][k][1]};
+    return new float[] {left + width * SLOT_X[ri][k], top + h * FLOOR_PIXEL_Y[ri] / 1370f};
+  }
+
+  static float[] fullSceneResidentPos(int ri, int slot, int occupants, float top, float bottom) {
+    float[] ground = fullSceneResidentPos(ri, slot, top, bottom);
+    if (occupants > SLOT_X[ri].length) {
+      // Larger groups share the same floor and X span instead of stacking on the third slot.
+      float fraction = Math.max(0, Math.min(occupants - 1, slot)) / (float) (occupants - 1);
+      ground[0] = 8f + 404f * (SLOT_X[ri][0] + (SLOT_X[ri][2] - SLOT_X[ri][0]) * fraction);
+    }
+    return ground;
   }
 
   static float[] shelterResidentPos(int ri, int slot) {

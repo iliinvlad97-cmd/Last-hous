@@ -222,28 +222,16 @@ public final class GameView extends View {
     if (game.screen == 0) {
       float sceneTop = 116f, sceneBottom = Math.max(610f, hh - 72f);
       float sceneH = sceneBottom - sceneTop;
-      if (y >= sceneTop + sceneH * .08f && y <= sceneTop + sceneH * .27f && x >= 145 && x <= 275) {
-        game.screen = 5;
-        game.overlay = 0;
-        invalidate();
-        return true;
-      }
-      int livePerson = -1;
-      for (int pi = 0; pi < game.people.size() && pi < 32; pi++) {
-        Resident ps = game.people.get(pi);
-        if (ps.alive
-            && !ps.job.equals("Экспедиция")
-            && x >= game.residentX[pi] - 17
-            && x <= game.residentX[pi] + 17
-            && y >= game.residentY[pi] - 28
-            && y <= game.residentY[pi] + 28) {
-          livePerson = pi;
-          break;
-        }
-      }
+      int livePerson = residentRenderer.shelterResidentAt(x, y);
       if (livePerson >= 0) {
         game.selected = livePerson;
         game.overlay = 1;
+        invalidate();
+        return true;
+      }
+      if (y >= sceneTop + sceneH * .08f && y <= sceneTop + sceneH * .27f && x >= 145 && x <= 275) {
+        game.screen = 5;
+        game.overlay = 0;
         invalidate();
         return true;
       }

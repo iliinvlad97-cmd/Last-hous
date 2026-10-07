@@ -3,54 +3,119 @@ package com.lastdom.game;
 import android.graphics.*;
 import java.util.ArrayList;
 
-/** Resident drawing and visual caches, preserving positions, slots and animation calculations. */
+/** Residents are drawn, moved and touched using their foot-contact point in scene coordinates. */
 final class ResidentRenderer {
 
+  private static final float BOOT_STROKE = 3.8f;
+  private static final float LEG_HEIGHT = 11f;
+  private static final float HIP_TO_SHOULDER = 12f;
+  private static final float BODY_HIT_HEIGHT = 46f;
+  private static final float BODY_HIT_HALF_WIDTH = 22f;
   private final GameView view;
+  private final boolean[] initialized = new boolean[32];
+  private float previousTop, previousBottom;
+  private boolean sceneBoundsReady;
 
   ResidentRenderer(GameView view) {
     this.view = view;
   }
 
+  private void prepareScene(float top, float bottom) {
+    if (!view.game.residentVisualReady) {
+      java.util.Arrays.fill(initialized, false);
+    } else if (sceneBoundsReady && (top != previousTop || bottom != previousBottom)) {
+      // Resize the current ground point with the same transform as the artwork, including mid-walk.
+      for (int i = 0; i < initialized.length; i++) {
+        if (initialized[i]) {
+          float ny = (view.game.residentY[i] - previousTop) / (previousBottom - previousTop);
+          view.game.residentY[i] = top + ny * (bottom - top);
+        }
+      }
+    }
+    previousTop = top;
+    previousBottom = bottom;
+    sceneBoundsReady = true;
+  }
+
   void drawFullSceneResidents(Canvas c, float top, float bottom) {
+    prepareScene(top, bottom);
     int[] slots = {0, 0, 0, 0, 0, 0};
-    for (int i = 0; i < view.game.people.size() && i < 32; i++) {
+    int[] occupants = roomOccupants();
+    boolean moving = false;
+    for (int i = 0; i < view.game.people.size() && i < initialized.length; i++) {
       Resident s = view.game.people.get(i);
-      if (!s.alive || s.job.equals("Экспедиция")) continue;
       int ri = view.game.homeRoomFor(s);
+      if (ri < 0) {
+        initialized[i] = false;
+        continue;
+      }
+      float[] target =
+          ShelterGeometry.fullSceneResidentPos(ri, slots[ri]++, occupants[ri], top, bottom);
+      if (!initialized[i]) {
+        view.game.residentX[i] = target[0];
+        view.game.residentY[i] = target[1];
+        view.game.residentVisualRoom[i] = ri;
+        initialized[i] = true;
+      } else {
+        float dx = target[0] - view.game.residentX[i];
+        float dy = target[1] - view.game.residentY[i];
+        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+        if (dist > 2f) {
+          float step = Math.min(3.8f, dist);
+          view.game.residentX[i] += dx / dist * step;
+          view.game.residentY[i] += dy / dist * step;
+          view.game.residentVisualRoom[i] = -1;
+          moving = true;
+        } else {
+          view.game.residentX[i] = target[0];
+          view.game.residentY[i] = target[1];
+          view.game.residentVisualRoom[i] = ri;
+        }
+      }
+      drawDynamicResident(c, s, view.game.residentX[i], view.game.residentY[i], i);
+    }
+    view.game.residentVisualReady = true;
+    if (moving) view.postInvalidateDelayed(45);
+  }
+
+  void ensureResidentVisuals() {
+    float top = 116f, bottom = Math.max(610f, view.H / view.scale - 72f);
+    prepareScene(top, bottom);
+    int[] slots = {0, 0, 0, 0, 0, 0};
+    int[] occupants = roomOccupants();
+    for (int i = 0; i < view.game.people.size() && i < initialized.length; i++) {
+      int ri = view.game.homeRoomFor(view.game.people.get(i));
       if (ri < 0) continue;
-      int slot = Math.min(2, slots[ri]++);
-      float[] q = ShelterGeometry.fullSceneResidentPos(ri, slot, top, bottom);
-      view.game.residentX[i] = q[0];
-      view.game.residentY[i] = q[1];
-      view.game.residentVisualRoom[i] = ri;
-      drawDynamicResident(c, s, q[0], q[1], i);
+      float[] target =
+          ShelterGeometry.fullSceneResidentPos(ri, slots[ri]++, occupants[ri], top, bottom);
+      if (!initialized[i]) {
+        view.game.residentX[i] = target[0];
+        view.game.residentY[i] = target[1];
+        view.game.residentVisualRoom[i] = ri;
+        initialized[i] = true;
+      }
     }
     view.game.residentVisualReady = true;
   }
 
-  void ensureResidentVisuals() {
-    if (view.game.residentVisualReady) return;
-    int[] slots = {0, 0, 0, 0, 0, 0};
-    for (int i = 0; i < Math.min(view.game.people.size(), 32); i++) {
+  private int[] roomOccupants() {
+    int[] counts = new int[6];
+    for (int i = 0; i < view.game.people.size() && i < initialized.length; i++) {
       int ri = view.game.homeRoomFor(view.game.people.get(i));
-      if (ri < 0) ri = 5;
-      float[] q = ShelterGeometry.shelterResidentPos(ri, Math.min(2, slots[ri]++));
-      view.game.residentX[i] = q[0];
-      view.game.residentY[i] = q[1];
-      view.game.residentVisualRoom[i] = ri;
+      if (ri >= 0) counts[ri]++;
     }
-    view.game.residentVisualReady = true;
+    return counts;
   }
 
   String residentState(Resident s, int i) {
     if (!s.alive) return "Погиб";
     if (s.job.equals("Экспедиция")) return "В городе";
     int ri = view.game.homeRoomFor(s);
-    if (i < 32
+    if (i >= 0
+        && i < initialized.length
         && view.game.residentVisualReady
-        && (Math.abs(view.game.residentX[i] - ShelterGeometry.shelterResidentPos(ri, 0)[0]) > 35
-            || view.game.residentVisualRoom[i] != ri)) return "Идёт: " + view.game.rooms[ri];
+        && initialized[i]
+        && view.game.residentVisualRoom[i] != ri) return "Идёт: " + view.game.rooms[ri];
     if (s.health < 45) return "Ранен • " + s.job;
     if (s.fatigue > 82) return "Измотан • " + s.job;
     if (s.job.equals("Отдых")) return "Отдыхает";
@@ -61,59 +126,23 @@ final class ResidentRenderer {
   }
 
   void drawLivingResidentsOverShelter(Canvas c) {
-    ensureResidentVisuals();
-    int[] slots = {0, 0, 0, 0, 0, 0};
-    boolean moving = false;
-    for (int i = 0; i < view.game.people.size() && i < 32; i++) {
-      Resident s = view.game.people.get(i);
-      int ri = view.game.homeRoomFor(s);
-      if (ri < 0) continue;
-      int slot = Math.min(2, slots[ri]++);
-      float[] target = ShelterGeometry.shelterResidentPos(ri, slot);
-      float dx = target[0] - view.game.residentX[i],
-          dy = target[1] - view.game.residentY[i],
-          dist = (float) Math.sqrt(dx * dx + dy * dy);
-      if (dist > 2) {
-        float step = Math.min(3.8f, dist);
-        view.game.residentX[i] += dx / dist * step;
-        view.game.residentY[i] += dy / dist * step;
-        moving = true;
-      } else {
-        view.game.residentX[i] = target[0];
-        view.game.residentY[i] = target[1];
-        view.game.residentVisualRoom[i] = ri;
-      }
-      float anim = (float) Math.sin(System.currentTimeMillis() / 190.0 + i * 1.7);
-      float yy =
-          view.game.residentY[i]
-              + (dist > 2
-                  ? Math.abs(anim) * 1.8f
-                  : s.job.equals("Отдых") ? anim * .6f : Math.abs(anim) * .8f);
-      drawDynamicResident(c, s, view.game.residentX[i], yy, i);
-      if (dist > 2) {
-        view.p.setColor(Color.argb(180, 20, 22, 25));
-        c.drawRoundRect(
-            view.sy(view.game.residentX[i] - 17),
-            view.sy(yy - 34),
-            view.sy(view.game.residentX[i] + 17),
-            view.sy(yy - 25),
-            view.sy(4),
-            view.sy(4),
-            view.p);
-      }
-    }
-    if (moving) view.postInvalidateDelayed(45);
+    // Keep the old entry point on the same ground-coordinate path as the main scene.
+    drawFullSceneResidents(c, 116f, Math.max(610f, view.H / view.scale - 72f));
   }
 
-  void drawDynamicResident(Canvas c, Resident s, float x, float y, int index) {
+  void drawDynamicResident(Canvas c, Resident s, float x, float groundY, int index) {
     // Stage 4: expressive resident sprites drawn in layers (shadow/body/head/gear/prop/status).
     long now = System.currentTimeMillis();
     float phase = (now / 150.0f) + index * 1.37f;
     int ri = view.game.homeRoomFor(s);
-    float[] target = ri >= 0 ? ShelterGeometry.shelterResidentPos(ri, 0) : new float[] {x, y};
-    float dist =
-        (float) Math.sqrt((target[0] - x) * (target[0] - x) + (target[1] - y) * (target[1] - y));
-    boolean walking = dist > 4;
+    boolean walking =
+        index >= 0
+            && index < initialized.length
+            && initialized[index]
+            && view.game.residentVisualRoom[index] != ri;
+    // The bottom of the rounded boot stroke touches groundY; anatomy grows upwards from it.
+    float feetY = groundY - BOOT_STROKE / 2f;
+    float shoulderY = feetY - LEG_HEIGHT - HIP_TO_SHOULDER;
     boolean resting = s.job.equals("Отдых");
     boolean hurt = s.health < 45;
     float walk = walking ? (float) Math.sin(phase) : 0f, breathe = (float) Math.sin(phase * .35f);
@@ -130,46 +159,51 @@ final class ResidentRenderer {
     if (hurt) cloth = Color.rgb(92, 72, 70);
     // floor shadow
     view.p.setColor(Color.argb(105, 0, 0, 0));
-    c.drawOval(view.sy(x - 12), view.sy(y + 17), view.sy(x + 12), view.sy(y + 22), view.p);
+    c.drawOval(
+        view.sy(x - 12), view.sy(groundY - 2.5f), view.sy(x + 12), view.sy(groundY + 2.5f), view.p);
     // legs animate while walking; resting pose is wider and lower
     view.p.setStrokeCap(Paint.Cap.ROUND);
     view.p.setStrokeWidth(view.sy(3.2f));
     view.p.setColor(Color.rgb(42, 45, 47));
     float leg = walking ? walk * 5 : 0;
-    float hipY = y + 12 + (resting ? 2 : 0);
-    c.drawLine(view.sy(x - 4), view.sy(hipY), view.sy(x - 5 - leg), view.sy(y + 23), view.p);
-    c.drawLine(view.sy(x + 4), view.sy(hipY), view.sy(x + 5 + leg), view.sy(y + 23), view.p);
+    float hipY = feetY - LEG_HEIGHT + (resting ? 2 : 0);
+    c.drawLine(view.sy(x - 4), view.sy(hipY), view.sy(x - 5 - leg), view.sy(feetY), view.p);
+    c.drawLine(view.sy(x + 4), view.sy(hipY), view.sy(x + 5 + leg), view.sy(feetY), view.p);
     // boots
-    view.p.setStrokeWidth(view.sy(3.8f));
-    c.drawLine(
-        view.sy(x - 7 - leg), view.sy(y + 23), view.sy(x - 3 - leg), view.sy(y + 23), view.p);
-    c.drawLine(
-        view.sy(x + 3 + leg), view.sy(y + 23), view.sy(x + 7 + leg), view.sy(y + 23), view.p);
+    view.p.setStrokeWidth(view.sy(BOOT_STROKE));
+    c.drawLine(view.sy(x - 7 - leg), view.sy(feetY), view.sy(x - 3 - leg), view.sy(feetY), view.p);
+    c.drawLine(view.sy(x + 3 + leg), view.sy(feetY), view.sy(x + 7 + leg), view.sy(feetY), view.p);
     // torso + jacket seam
     view.p.setColor(cloth);
     c.drawRoundRect(
         view.sy(x - 9 + lean),
-        view.sy(y - 5 + breathe * .3f),
+        view.sy(shoulderY - 5 + breathe * .3f),
         view.sy(x + 9 + lean),
-        view.sy(y + 14),
+        view.sy(shoulderY + 14),
         view.sy(4),
         view.sy(4),
         view.p);
     view.p.setColor(Color.argb(90, 255, 255, 255));
     view.p.setStrokeWidth(view.sy(.8f));
-    c.drawLine(view.sy(x + lean), view.sy(y - 3), view.sy(x + lean), view.sy(y + 11), view.p);
+    c.drawLine(
+        view.sy(x + lean),
+        view.sy(shoulderY - 3),
+        view.sy(x + lean),
+        view.sy(shoulderY + 11),
+        view.p);
     // head / hair
     view.p.setColor(skin);
-    c.drawCircle(view.sy(x + lean * .45f), view.sy(y - 11 + breathe * .2f), view.sy(6.8f), view.p);
+    c.drawCircle(
+        view.sy(x + lean * .45f), view.sy(shoulderY - 11 + breathe * .2f), view.sy(6.8f), view.p);
     view.p.setColor(
         index == 1
             ? Color.rgb(83, 55, 39)
             : index == 3 ? Color.rgb(55, 38, 30) : Color.rgb(43, 36, 32));
     c.drawArc(
         view.sy(x - 7 + lean * .45f),
-        view.sy(y - 19),
+        view.sy(shoulderY - 19),
         view.sy(x + 7 + lean * .45f),
-        view.sy(y - 5),
+        view.sy(shoulderY - 5),
         180,
         185,
         true,
@@ -179,41 +213,72 @@ final class ResidentRenderer {
     view.p.setColor(cloth);
     if (walking) {
       c.drawLine(
-          view.sy(x - 7 + lean), view.sy(y), view.sy(x - 12 - walk * 3), view.sy(y + 9), view.p);
+          view.sy(x - 7 + lean),
+          view.sy(shoulderY),
+          view.sy(x - 12 - walk * 3),
+          view.sy(shoulderY + 9),
+          view.p);
       c.drawLine(
-          view.sy(x + 7 + lean), view.sy(y), view.sy(x + 12 + walk * 3), view.sy(y + 8), view.p);
+          view.sy(x + 7 + lean),
+          view.sy(shoulderY),
+          view.sy(x + 12 + walk * 3),
+          view.sy(shoulderY + 8),
+          view.p);
     } else if (resting) {
-      c.drawLine(view.sy(x - 6), view.sy(y), view.sy(x - 9), view.sy(y + 10), view.p);
-      c.drawLine(view.sy(x + 6), view.sy(y), view.sy(x + 9), view.sy(y + 10), view.p);
+      c.drawLine(
+          view.sy(x - 6), view.sy(shoulderY), view.sy(x - 9), view.sy(shoulderY + 10), view.p);
+      c.drawLine(
+          view.sy(x + 6), view.sy(shoulderY), view.sy(x + 9), view.sy(shoulderY + 10), view.p);
     } else {
       float work = (float) Math.sin(phase * 1.5f) * 2;
       c.drawLine(
-          view.sy(x - 7 + lean), view.sy(y), view.sy(x - 13 + lean), view.sy(y + 7 + work), view.p);
+          view.sy(x - 7 + lean),
+          view.sy(shoulderY),
+          view.sy(x - 13 + lean),
+          view.sy(shoulderY + 7 + work),
+          view.p);
       c.drawLine(
-          view.sy(x + 7 + lean), view.sy(y), view.sy(x + 13 + lean), view.sy(y + 6 - work), view.p);
+          view.sy(x + 7 + lean),
+          view.sy(shoulderY),
+          view.sy(x + 13 + lean),
+          view.sy(shoulderY + 6 - work),
+          view.p);
     }
     // role/job props make residents readable without labels.
     if (s.role.equals("Врач") || s.job.equals("Лечение")) {
       view.p.setColor(Color.WHITE);
       view.p.setStrokeWidth(view.sy(1.8f));
       c.drawLine(
-          view.sy(x + lean - 3), view.sy(y + 4), view.sy(x + lean + 3), view.sy(y + 4), view.p);
-      c.drawLine(view.sy(x + lean), view.sy(y + 1), view.sy(x + lean), view.sy(y + 7), view.p);
+          view.sy(x + lean - 3),
+          view.sy(shoulderY + 4),
+          view.sy(x + lean + 3),
+          view.sy(shoulderY + 4),
+          view.p);
+      c.drawLine(
+          view.sy(x + lean),
+          view.sy(shoulderY + 1),
+          view.sy(x + lean),
+          view.sy(shoulderY + 7),
+          view.p);
     }
     if (s.job.equals("Ремонт") || s.role.equals("Механик")) {
       view.p.setColor(Color.rgb(180, 184, 185));
       view.p.setStrokeWidth(view.sy(2));
       c.drawLine(
-          view.sy(x + 12 + lean), view.sy(y + 5), view.sy(x + 17 + lean), view.sy(y), view.p);
-      c.drawCircle(view.sy(x + 17 + lean), view.sy(y), view.sy(2), view.p);
+          view.sy(x + 12 + lean),
+          view.sy(shoulderY + 5),
+          view.sy(x + 17 + lean),
+          view.sy(shoulderY),
+          view.p);
+      c.drawCircle(view.sy(x + 17 + lean), view.sy(shoulderY), view.sy(2), view.p);
     }
     if (s.job.equals("Охрана") || s.role.equals("Охрана")) {
       view.p.setColor(Color.rgb(38, 42, 40));
       c.drawRoundRect(
           view.sy(x + 8),
-          view.sy(y - 1),
+          view.sy(shoulderY - 1),
           view.sy(x + 17),
-          view.sy(y + 3),
+          view.sy(shoulderY + 3),
           view.sy(1.5f),
           view.sy(1.5f),
           view.p);
@@ -223,38 +288,54 @@ final class ResidentRenderer {
       view.p.setColor(Color.argb(210, 210, 220, 225));
       view.p.setTextSize(view.sy(6));
       view.p.setTypeface(Typeface.DEFAULT_BOLD);
-      c.drawText("Z", view.sy(x + 10), view.sy(y - 22), view.p);
+      c.drawText("Z", view.sy(x + 10), view.sy(shoulderY - 22), view.p);
     }
     if (hurt) {
       view.p.setColor(Color.rgb(225, 225, 215));
       c.drawRoundRect(
           view.sy(x - 7),
-          view.sy(y - 13),
+          view.sy(shoulderY - 13),
           view.sy(x + 1),
-          view.sy(y - 10),
+          view.sy(shoulderY - 10),
           view.sy(1),
           view.sy(1),
           view.p);
       view.p.setColor(view.danger);
-      c.drawCircle(view.sy(x + 10), view.sy(y - 18), view.sy(3.2f), view.p);
+      c.drawCircle(view.sy(x + 10), view.sy(shoulderY - 18), view.sy(3.2f), view.p);
     } else {
       view.p.setColor(resting ? view.blue : view.good);
-      c.drawCircle(view.sy(x + 10), view.sy(y - 18), view.sy(2.7f), view.p);
+      c.drawCircle(view.sy(x + 10), view.sy(shoulderY - 18), view.sy(2.7f), view.p);
     }
     view.p.setStrokeCap(Paint.Cap.BUTT);
   }
 
   int shelterResidentAt(float x, float y) {
     ensureResidentVisuals();
+    int nearest = -1;
+    float nearestDistance = Float.POSITIVE_INFINITY;
     for (int i = 0; i < view.game.people.size() && i < 32; i++) {
       Resident s = view.game.people.get(i);
       if (!s.alive || s.job.equals("Экспедиция")) continue;
-      if (x >= view.game.residentX[i] - 17
-          && x <= view.game.residentX[i] + 17
-          && y >= view.game.residentY[i] - 25
-          && y <= view.game.residentY[i] + 27) return i;
+      if (containsGroundedResident(x, y, view.game.residentX[i], view.game.residentY[i])) {
+        // Crowded-room hitboxes can overlap: prefer the body nearest the touch, then the top layer.
+        float dx = x - view.game.residentX[i];
+        float dy = y - (view.game.residentY[i] - BODY_HIT_HEIGHT / 2f);
+        float distance = dx * dx + dy * dy;
+        if (distance <= nearestDistance) {
+          nearest = i;
+          nearestDistance = distance;
+        }
+      }
     }
-    return -1;
+    return nearest;
+  }
+
+  static boolean containsGroundedResident(float x, float y, float groundX, float groundY) {
+    // Includes the head, leaning/tool poses and boots, with 2 units of touch padding at the floor.
+    return x >= groundX - BODY_HIT_HALF_WIDTH
+        && x <= groundX + BODY_HIT_HALF_WIDTH
+        && y >= groundY - BODY_HIT_HEIGHT
+        && y <= groundY + 2f;
   }
 
   void drawResidentDock(Canvas c, float top) {
