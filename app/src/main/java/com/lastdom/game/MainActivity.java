@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();scale=W/420f;c.drawColor(bg);if(screen==0)drawMain(c);else if(screen==1)drawSurvivor(c);else if(screen==2)drawJournal(c);else if(screen==3)drawRooms(c);else if(screen==4)drawRoomDetail(c);else drawMap(c);if(event)drawEvent(c);if(jobMenu)drawJobMenu(c);if(gameOver)drawGameOver(c);}
         void drawHeader(Canvas c,String sub){bold(c,"ПОСЛЕДНИЙ ДОМ",20,30,20,text);txt(c,sub,20,49,11,muted);box(c,250,12,400,52,panel2,9);bold(c,"Д"+day+"  "+clock(),264,31,12,text);txt(c,phase(),264,46,9,phase().equals("НОЧЬ")?blue:accent);}
         void drawMain(Canvas c){
-            drawHeader(c,"убежище • v0.9 LIVING SHELTER • ЭТАП 1");
+            drawHeader(c,"убежище • v0.9.1 DYNAMIC SHELTER");
             drawResources(c);
             // The source image is now HOUSE ONLY: no baked HUD, resident cards or navigation.
             if(shelterBitmap!=null){
@@ -51,8 +51,9 @@ public class MainActivity extends Activity {
                 RectF dst=new RectF(sy(8),sy(118),sy(412),sy(568));
                 c.drawBitmap(shelterBitmap,src,dst,p);
             }
+            drawDynamicRoomState(c);
             drawLivingResidentsOverShelter(c);
-            drawCompactResidents(c,578);
+            drawResidentDock(c,578);
             float hh=H/scale;
             box(c,20,655,400,703,accent,12); bold(c,"ВЫЙТИ В ГОРОД",139,685,12,Color.rgb(30,27,23));
             drawNav(c);
@@ -72,37 +73,61 @@ public class MainActivity extends Activity {
             float[][] base={{162,235},{327,235},{163,362},{327,362},{162,488},{327,488}};
             float dx=(slot%3-1)*18f; return new float[]{base[ri][0]+dx,base[ri][1]};
         }
+        void drawDynamicRoomState(Canvas c){
+            // Dynamic overlays make the shelter react to room state instead of behaving like one flat JPEG.
+            float[][] r={{12,150,210,280},{210,150,408,280},{12,280,210,410},{210,280,408,410},{12,410,210,535},{210,410,408,535}};
+            for(int i=0;i<6;i++){
+                float[] q=r[i]; int cond=roomCondition[i];
+                if(cond<70){p.setColor(Color.argb(Math.min(125,(70-cond)*3),90,18,12));c.drawRect(sy(q[0]),sy(q[1]),sy(q[2]),sy(q[3]),p);}
+                if(buildingRoom==i){p.setColor(Color.argb(105,220,150,55));c.drawRect(sy(q[0]),sy(q[3]-10),sy(q[0]+(q[2]-q[0])*(1f-Math.min(1f,buildRemaining/(float)(120+roomLevels[i]*90)))),sy(q[3]),p);}
+                // Small status plate; no duplicate room title/HUD.
+                if(cond<85){box(c,q[2]-45,q[1]+7,q[2]-7,q[1]+23,Color.argb(190,20,22,25),6);bold(c,cond+"%",q[2]-38,q[1]+19,7,cond<45?danger:accent);}
+            }
+            if(power<=0){p.setColor(Color.argb(115,0,4,12));c.drawRect(sy(8),sy(118),sy(412),sy(568),p);txt(c,"НЕТ ЭЛЕКТРИЧЕСТВА",142,139,8,danger);}
+        }
         void drawLivingResidentsOverShelter(Canvas c){
             int[] slots={0,0,0,0,0,0};
             for(int i=0;i<people.size();i++){
                 Survivor s=people.get(i); int ri=homeRoomFor(s); if(ri<0) continue;
                 int slot=slots[ri]++; if(slot>2) continue; float[] q=shelterResidentPos(ri,slot);
-                p.setColor(Color.argb(175,12,14,16)); c.drawCircle(sy(q[0]),sy(q[1]-3),sy(15),p);
-                drawPersonSprite(c,s,q[0],q[1],.78f);
-                p.setColor(s.job.equals("Отдых")?blue:good); c.drawCircle(sy(q[0]+11),sy(q[1]-19),sy(3.2f),p);
-                bold(c,s.name,q[0]-15,q[1]+25,7,text);
+                drawDynamicResident(c,s,q[0],q[1],i);
             }
+        }
+        void drawDynamicResident(Canvas c,Survivor s,float x,float y,int index){
+            // Larger game-like character silhouette: no letter circles and no name covering the room art.
+            int skin=Color.rgb(199,158,126); int cloth=index==0?Color.rgb(55,70,78):index==1?Color.rgb(186,190,180):index==2?Color.rgb(65,73,62):index==3?Color.rgb(94,70,57):Color.rgb(65,74,82);
+            p.setColor(Color.argb(90,0,0,0));c.drawOval(sy(x-11),sy(y+14),sy(x+11),sy(y+19),p);
+            p.setColor(skin);c.drawCircle(sy(x),sy(y-10),sy(6.5f),p);
+            p.setColor(Color.rgb(45,35,30));c.drawArc(sy(x-7),sy(y-18),sy(x+7),sy(y-5),180,180,true,p);
+            p.setColor(cloth);c.drawRoundRect(sy(x-8),sy(y-4),sy(x+8),sy(y+15),sy(4),sy(4),p);
+            p.setStrokeWidth(sy(3));p.setStrokeCap(Paint.Cap.ROUND);c.drawLine(sy(x-4),sy(y+14),sy(x-5),sy(y+23),p);c.drawLine(sy(x+4),sy(y+14),sy(x+5),sy(y+23),p);p.setStrokeCap(Paint.Cap.BUTT);
+            p.setColor(s.job.equals("Отдых")?blue:good);c.drawCircle(sy(x+9),sy(y-17),sy(3),p);
+            if(s.health<55){p.setColor(danger);c.drawCircle(sy(x-9),sy(y-17),sy(3),p);}
         }
         int shelterResidentAt(float x,float y){
             int[] slots={0,0,0,0,0,0};
             for(int i=0;i<people.size();i++){
                 Survivor s=people.get(i); int ri=homeRoomFor(s); if(ri<0) continue;
                 int slot=slots[ri]++; if(slot>2) continue; float[] q=shelterResidentPos(ri,slot);
-                float dx=x-q[0],dy=y-(q[1]-4); if(dx*dx+dy*dy<=22*22) return i;
+                if(x>=q[0]-15&&x<=q[0]+15&&y>=q[1]-23&&y<=q[1]+25)return i;
             }
             return -1;
         }
-
-        void drawCompactResidents(Canvas c,float top){
+        void drawResidentDock(Canvas c,float top){
             float cardW=72,gap=6,left=14;
             for(int i=0;i<Math.min(5,people.size());i++){
                 Survivor s=people.get(i); float x=left+i*(cardW+gap);
                 box(c,x,top,x+cardW,top+62,panel,10);
-                p.setColor(Color.rgb(57,61,64)); c.drawCircle(sy(x+16),sy(top+19),sy(11),p);
-                bold(c,s.name.substring(0,1),x+12,top+23,9,accent);
+                drawMiniPortrait(c,s,x+17,top+19,i);
                 bold(c,s.name,x+7,top+42,8,text);
                 txt(c,shortJob(s.job),x+7,top+55,7,s.job.equals("Отдых")?blue:good);
             }
+        }
+        void drawMiniPortrait(Canvas c,Survivor s,float x,float y,int i){
+            p.setColor(Color.rgb(51,55,58));c.drawCircle(sy(x),sy(y),sy(12),p);
+            p.setColor(Color.rgb(199,158,126));c.drawCircle(sy(x),sy(y-3),sy(5),p);
+            int cloth=i==0?Color.rgb(55,70,78):i==1?Color.rgb(186,190,180):i==2?Color.rgb(65,73,62):i==3?Color.rgb(94,70,57):Color.rgb(65,74,82);
+            p.setColor(cloth);c.drawRoundRect(sy(x-7),sy(y+2),sy(x+7),sy(y+10),sy(4),sy(4),p);
         }
         String shortJob(String j){return j.length()>9?j.substring(0,9):j;}
 
