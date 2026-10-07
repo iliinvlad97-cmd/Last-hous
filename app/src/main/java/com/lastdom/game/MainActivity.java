@@ -44,7 +44,7 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();scale=W/420f;c.drawColor(bg);if(screen==0)drawMain(c);else if(screen==1)drawSurvivor(c);else if(screen==2)drawJournal(c);else if(screen==3)drawRooms(c);else if(screen==4)drawRoomDetail(c);else drawMap(c);if(event)drawEvent(c);if(jobMenu)drawJobMenu(c);if(gameOver)drawGameOver(c);}
         void drawHeader(Canvas c,String sub){bold(c,"ПОСЛЕДНИЙ ДОМ",20,30,20,text);txt(c,sub,20,49,11,muted);box(c,250,12,400,52,panel2,9);bold(c,"Д"+day+"  "+clock(),264,31,12,text);txt(c,phase(),264,46,9,phase().equals("НОЧЬ")?blue:accent);}
         void drawMain(Canvas c){
-            drawHeader(c,"убежище • v0.9.5.2 ВЫРАВНИВАНИЕ");
+            drawHeader(c,"убежище • v0.9.5.3 PIXEL ALIGNMENT");
             drawResources(c);
 
             // v0.9.5.1: one continuous world image. No old shelter layer and no separate city strip.
@@ -76,12 +76,12 @@ public class MainActivity extends Activity {
         float[] fullSceneRoomRect(int ri,float top,float bottom){
             float h=bottom-top;
             switch(ri){
-                case 0:return sceneRect(.075f,.365f,.455f,.525f,top,h); // generator
-                case 3:return sceneRect(.525f,.365f,.900f,.525f,top,h); // workshop / upper-right
-                case 1:return sceneRect(.075f,.555f,.455f,.690f,top,h); // kitchen
-                case 2:return sceneRect(.535f,.555f,.900f,.690f,top,h); // medpoint
-                case 5:return sceneRect(.075f,.720f,.455f,.835f,top,h); // bedroom
-                case 4:return sceneRect(.080f,.245f,.900f,.350f,top,h); // surface barricades
+                case 0:return sceneRect(.055f,.330f,.515f,.480f,top,h); // generator: full visible upper-left room
+                case 1:return sceneRect(.055f,.485f,.515f,.640f,top,h); // kitchen: full middle-left room
+                case 2:return sceneRect(.515f,.485f,.930f,.640f,top,h); // medpoint: full middle-right room
+                case 5:return sceneRect(.055f,.645f,.515f,.805f,top,h); // bedroom: full lower-left room
+                case 3:return sceneRect(.515f,.645f,.930f,.805f,top,h); // workshop/storage: full lower-right room
+                case 4:return sceneRect(.055f,.180f,.945f,.315f,top,h); // surface barricades
                 default:return new float[]{-100,-100,-90,-90};
             }
         }
@@ -92,7 +92,7 @@ public class MainActivity extends Activity {
 
         int fullSceneRoomAt(float x,float y,float top,float bottom){
             // Explicit priority prevents a neighbouring room from stealing edge taps.
-            int[] order={0,3,1,2,5,4};
+            int[] order={0,1,2,5,3,4};
             for(int ri:order){float[] q=fullSceneRoomRect(ri,top,bottom);if(x>=q[0]&&x<=q[2]&&y>=q[1]&&y<=q[3])return ri;}
             return -1;
         }
@@ -101,12 +101,12 @@ public class MainActivity extends Activity {
             float h=bottom-top,left=8f,width=404f;
             // Dedicated visual slots per room. They intentionally do not use hitbox centres.
             float[][][] pts={
-                {{.22f,.485f},{.31f,.485f},{.39f,.485f}}, // generator
-                {{.22f,.660f},{.31f,.660f},{.39f,.660f}}, // kitchen
-                {{.64f,.660f},{.73f,.660f},{.82f,.660f}}, // medpoint
-                {{.63f,.485f},{.73f,.485f},{.83f,.485f}}, // workshop
-                {{.34f,.330f},{.50f,.330f},{.66f,.330f}}, // barricades on surface
-                {{.20f,.815f},{.31f,.815f},{.41f,.815f}}  // bedroom
+                {{.18f,.450f},{.29f,.450f},{.40f,.450f}}, // generator - feet sit on upper-floor line
+                {{.18f,.610f},{.29f,.610f},{.40f,.610f}}, // kitchen
+                {{.62f,.610f},{.73f,.610f},{.84f,.610f}}, // medpoint
+                {{.62f,.775f},{.73f,.775f},{.84f,.775f}}, // workshop/storage lower-right
+                {{.28f,.285f},{.50f,.285f},{.72f,.285f}}, // barricades on surface
+                {{.17f,.775f},{.29f,.775f},{.41f,.775f}}  // bedroom lower-left
             };
             int k=Math.max(0,Math.min(2,slot));
             return new float[]{left+width*pts[ri][k][0],top+h*pts[ri][k][1]};
