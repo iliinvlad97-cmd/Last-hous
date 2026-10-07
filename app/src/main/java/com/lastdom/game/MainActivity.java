@@ -44,7 +44,7 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();scale=W/420f;c.drawColor(bg);if(screen==0)drawMain(c);else if(screen==1)drawSurvivor(c);else if(screen==2)drawJournal(c);else if(screen==3)drawRooms(c);else if(screen==4)drawRoomDetail(c);else drawMap(c);if(event)drawEvent(c);if(jobMenu)drawJobMenu(c);if(gameOver)drawGameOver(c);}
         void drawHeader(Canvas c,String sub){bold(c,"ПОСЛЕДНИЙ ДОМ",20,30,20,text);txt(c,sub,20,49,11,muted);box(c,250,12,400,52,panel2,9);bold(c,"Д"+day+"  "+clock(),264,31,12,text);txt(c,phase(),264,46,9,phase().equals("НОЧЬ")?blue:accent);}
         void drawMain(Canvas c){
-            drawHeader(c,"убежище • v0.9.5.1 ЕДИНАЯ СЦЕНА");
+            drawHeader(c,"убежище • v0.9.5.2 ВЫРАВНИВАНИЕ");
             drawResources(c);
 
             // v0.9.5.1: one continuous world image. No old shelter layer and no separate city strip.
@@ -71,26 +71,45 @@ public class MainActivity extends Activity {
             if(incidentRoom>=0){float[] q=fullSceneRoomRect(incidentRoom,top,bottom);float pulse=(float)(.5+.5*Math.sin(System.currentTimeMillis()/220.0));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sy(2));p.setColor(Color.argb((int)(120+100*pulse),235,85,60));c.drawRoundRect(sy(q[0]),sy(q[1]),sy(q[2]),sy(q[3]),sy(7),sy(7),p);p.setStyle(Paint.Style.FILL);}
         }
 
+        // v0.9.5.2: hitboxes are mapped directly to the artwork, not to the old 2x3 grid.
+        // Values below are normalized positions inside shelter_full_scene.png.
         float[] fullSceneRoomRect(int ri,float top,float bottom){
-            float h=bottom-top, l=18, mid=210, r=402;
-            // New art: surface occupies the upper quarter, then three main playable room rows.
-            float y1=top+h*.29f, y2=top+h*.48f, y3=top+h*.67f, y4=top+h*.84f;
+            float h=bottom-top;
             switch(ri){
-                case 0:return new float[]{l,y1,mid,y2};       // generator
-                case 3:return new float[]{mid,y1,r,y2};       // workshop
-                case 1:return new float[]{l,y2,mid,y3};       // kitchen
-                case 2:return new float[]{mid,y2,r,y3};       // medpoint
-                case 5:return new float[]{l,y3,mid,y4};       // bedroom
-                default:return new float[]{mid,y3,r,y4};      // barricades / armory
+                case 0:return sceneRect(.075f,.365f,.455f,.525f,top,h); // generator
+                case 3:return sceneRect(.525f,.365f,.900f,.525f,top,h); // workshop / upper-right
+                case 1:return sceneRect(.075f,.555f,.455f,.690f,top,h); // kitchen
+                case 2:return sceneRect(.535f,.555f,.900f,.690f,top,h); // medpoint
+                case 5:return sceneRect(.075f,.720f,.455f,.835f,top,h); // bedroom
+                case 4:return sceneRect(.080f,.245f,.900f,.350f,top,h); // surface barricades
+                default:return new float[]{-100,-100,-90,-90};
             }
+        }
+        float[] sceneRect(float nx1,float ny1,float nx2,float ny2,float top,float h){
+            float left=8f, width=404f;
+            return new float[]{left+width*nx1,top+h*ny1,left+width*nx2,top+h*ny2};
         }
 
         int fullSceneRoomAt(float x,float y,float top,float bottom){
-            for(int i=0;i<6;i++){float[] q=fullSceneRoomRect(i,top,bottom);if(x>=q[0]&&x<=q[2]&&y>=q[1]&&y<=q[3])return i;}return -1;
+            // Explicit priority prevents a neighbouring room from stealing edge taps.
+            int[] order={0,3,1,2,5,4};
+            for(int ri:order){float[] q=fullSceneRoomRect(ri,top,bottom);if(x>=q[0]&&x<=q[2]&&y>=q[1]&&y<=q[3])return ri;}
+            return -1;
         }
 
         float[] fullSceneResidentPos(int ri,int slot,float top,float bottom){
-            float[] q=fullSceneRoomRect(ri,top,bottom);float cx=(q[0]+q[2])/2f+(slot-1)*18f;float cy=q[3]-18f;return new float[]{cx,cy};
+            float h=bottom-top,left=8f,width=404f;
+            // Dedicated visual slots per room. They intentionally do not use hitbox centres.
+            float[][][] pts={
+                {{.22f,.485f},{.31f,.485f},{.39f,.485f}}, // generator
+                {{.22f,.660f},{.31f,.660f},{.39f,.660f}}, // kitchen
+                {{.64f,.660f},{.73f,.660f},{.82f,.660f}}, // medpoint
+                {{.63f,.485f},{.73f,.485f},{.83f,.485f}}, // workshop
+                {{.34f,.330f},{.50f,.330f},{.66f,.330f}}, // barricades on surface
+                {{.20f,.815f},{.31f,.815f},{.41f,.815f}}  // bedroom
+            };
+            int k=Math.max(0,Math.min(2,slot));
+            return new float[]{left+width*pts[ri][k][0],top+h*pts[ri][k][1]};
         }
 
         void drawFullSceneResidents(Canvas c,float top,float bottom){
@@ -103,7 +122,6 @@ public class MainActivity extends Activity {
             }
             residentVisualReady=true;
         }
-
 
 
         int homeRoomFor(Survivor s){
