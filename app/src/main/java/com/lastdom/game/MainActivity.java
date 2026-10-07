@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();scale=W/420f;c.drawColor(bg);if(screen==0)drawMain(c);else if(screen==1)drawSurvivor(c);else if(screen==2)drawJournal(c);else if(screen==3)drawRooms(c);else if(screen==4)drawRoomDetail(c);else drawMap(c);if(event)drawEvent(c);if(jobMenu)drawJobMenu(c);if(gameOver)drawGameOver(c);}
         void drawHeader(Canvas c,String sub){bold(c,"ПОСЛЕДНИЙ ДОМ",20,30,20,text);txt(c,sub,20,49,11,muted);box(c,250,12,400,52,panel2,9);bold(c,"Д"+day+"  "+clock(),264,31,12,text);txt(c,phase(),264,46,9,phase().equals("НОЧЬ")?blue:accent);}
         void drawMain(Canvas c){
-            drawHeader(c,"убежище • v0.9.1 DYNAMIC SHELTER");
+            drawHeader(c,"убежище • v0.9.2 LIVING ROOMS");
             drawResources(c);
             // The source image is now HOUSE ONLY: no baked HUD, resident cards or navigation.
             if(shelterBitmap!=null){
@@ -51,7 +51,9 @@ public class MainActivity extends Activity {
                 RectF dst=new RectF(sy(8),sy(118),sy(412),sy(568));
                 c.drawBitmap(shelterBitmap,src,dst,p);
             }
+            drawTimeOfDayLighting(c);
             drawDynamicRoomState(c);
+            drawRoomActivityEffects(c);
             drawLivingResidentsOverShelter(c);
             drawResidentDock(c,578);
             float hh=H/scale;
@@ -85,6 +87,53 @@ public class MainActivity extends Activity {
             }
             if(power<=0){p.setColor(Color.argb(115,0,4,12));c.drawRect(sy(8),sy(118),sy(412),sy(568),p);txt(c,"НЕТ ЭЛЕКТРИЧЕСТВА",142,139,8,danger);}
         }
+        void drawTimeOfDayLighting(Canvas c){
+            int h=gameMinute/60;
+            int overlay;
+            if(h>=6&&h<10) overlay=Color.argb(34,245,181,103);       // warm morning
+            else if(h>=10&&h<18) overlay=Color.argb(10,230,238,245); // daylight
+            else if(h>=18&&h<22) overlay=Color.argb(48,221,116,53);  // sunset
+            else overlay=Color.argb(112,8,18,38);                    // night
+            p.setColor(overlay); c.drawRect(sy(8),sy(118),sy(412),sy(568),p);
+            // At night, powered rooms retain a warm pool of light.
+            if((h>=18||h<7)&&power>0){
+                float[][] centers={{111,215},{309,215},{111,345},{309,345},{111,472},{309,472}};
+                for(int i=0;i<6;i++){
+                    float cx=centers[i][0],cy=centers[i][1];
+                    RadialGradient g=new RadialGradient(sy(cx),sy(cy),sy(78),Color.argb(65,255,188,82),Color.TRANSPARENT,Shader.TileMode.CLAMP);
+                    p.setShader(g);c.drawCircle(sy(cx),sy(cy),sy(78),p);p.setShader(null);
+                }
+            }
+        }
+        void drawRoomActivityEffects(Canvas c){
+            // Activity is tied to actual assignments, so rooms visibly "work".
+            int pulse=(gameMinute%4);
+            for(int ri=0;ri<6;ri++){
+                int workers=0; for(Survivor s:people) if(s.alive&&homeRoomFor(s)==ri&&!s.job.equals("Отдых")) workers++;
+                if(workers==0) continue;
+                float[][] centers={{111,215},{309,215},{111,345},{309,345},{111,472},{309,472}};
+                float x=centers[ri][0],y=centers[ri][1];
+                if(ri==0){ // generator vibration / electric pulse
+                    p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sy(2));p.setColor(Color.argb(180,235,167,62));
+                    c.drawCircle(sy(x-42),sy(y+17),sy(9+pulse*2),p);p.setStyle(Paint.Style.FILL);
+                    for(int k=0;k<3;k++){p.setColor(Color.argb(180,255,205,88));c.drawCircle(sy(x+30+k*5),sy(y-18-k*3+pulse),sy(1.6f),p);}
+                }else if(ri==1){ // kitchen steam
+                    p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sy(2));p.setColor(Color.argb(115,235,235,225));
+                    for(int k=0;k<3;k++){float xx=x-18+k*14;c.drawArc(sy(xx-5),sy(y-24-pulse*2),sy(xx+5),sy(y-6-pulse*2),180,180,false,p);}p.setStyle(Paint.Style.FILL);
+                }else if(ri==2){ // med monitor
+                    p.setColor(Color.argb(210,86,190,113));c.drawCircle(sy(x+58),sy(y-27),sy(3+pulse*.5f),p);
+                    p.setStrokeWidth(sy(1.5f));c.drawLine(sy(x+38),sy(y-12),sy(x+45),sy(y-12),p);c.drawLine(sy(x+45),sy(y-12),sy(x+49),sy(y-19),p);c.drawLine(sy(x+49),sy(y-19),sy(x+54),sy(y-7),p);c.drawLine(sy(x+54),sy(y-7),sy(x+61),sy(y-12),p);
+                }else if(ri==3){ // workshop sparks
+                    for(int k=0;k<5;k++){float a=(k*71+pulse*29)*0.01745f;float rr=8+k*2;p.setColor(Color.argb(220,255,165,55));c.drawCircle(sy(x+22+(float)Math.cos(a)*rr),sy(y+8+(float)Math.sin(a)*rr),sy(1.5f),p);}
+                }else if(ri==4){ // guard alert sweep
+                    p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sy(2));p.setColor(Color.argb(150,210,93,64));c.drawArc(sy(x-50),sy(y-35),sy(x+50),sy(y+35),200+pulse*10,45,false,p);p.setStyle(Paint.Style.FILL);
+                }
+            }
+            if(buildingRoom>=0){
+                float[][] centers={{111,215},{309,215},{111,345},{309,345},{111,472},{309,472}};float x=centers[buildingRoom][0],y=centers[buildingRoom][1];
+                for(int k=0;k<4;k++){p.setColor(Color.argb(210,255,177,64));c.drawCircle(sy(x-20+k*12),sy(y+25-(k%2)*8),sy(2),p);}
+            }
+        }
         void drawLivingResidentsOverShelter(Canvas c){
             int[] slots={0,0,0,0,0,0};
             for(int i=0;i<people.size();i++){
@@ -101,6 +150,10 @@ public class MainActivity extends Activity {
             p.setColor(Color.rgb(45,35,30));c.drawArc(sy(x-7),sy(y-18),sy(x+7),sy(y-5),180,180,true,p);
             p.setColor(cloth);c.drawRoundRect(sy(x-8),sy(y-4),sy(x+8),sy(y+15),sy(4),sy(4),p);
             p.setStrokeWidth(sy(3));p.setStrokeCap(Paint.Cap.ROUND);c.drawLine(sy(x-4),sy(y+14),sy(x-5),sy(y+23),p);c.drawLine(sy(x+4),sy(y+14),sy(x+5),sy(y+23),p);p.setStrokeCap(Paint.Cap.BUTT);
+            // Pose communicates state: resting residents stay neutral, workers lean into the task.
+            p.setStrokeWidth(sy(2.5f));p.setColor(cloth);
+            if(!s.job.equals("Отдых")){c.drawLine(sy(x-6),sy(y+1),sy(x-13),sy(y+8),p);c.drawLine(sy(x+6),sy(y+1),sy(x+13),sy(y+6),p);}
+            else {c.drawLine(sy(x-5),sy(y+1),sy(x-8),sy(y+10),p);c.drawLine(sy(x+5),sy(y+1),sy(x+8),sy(y+10),p);}
             p.setColor(s.job.equals("Отдых")?blue:good);c.drawCircle(sy(x+9),sy(y-17),sy(3),p);
             if(s.health<55){p.setColor(danger);c.drawCircle(sy(x-9),sy(y-17),sy(3),p);}
         }
