@@ -23,7 +23,7 @@ public class MainActivity extends Activity {
         String[] rooms={"Генераторная","Кухня","Медпункт","Мастерская","Баррикады","Спальня"};
         String[] roomJobs={"Ремонт","Еда","Лечение","Материалы","Охрана","Отдых"};
         int[] roomLevels={1,1,1,1,1,1},roomCondition={100,100,100,100,100,100};
-        int day=1,gameMinute=480,speed=1,food=28,water=34,power=24,mats=18,threat=12,shelter=100,selected=-1,selectedRoom=-1,screen=0,overlay=0,buildingRoom=-1,buildRemaining=0;
+        int day=1,gameMinute=480,speed=1,food=28,water=34,power=24,mats=18,threat=12,shelter=100,selected=-1,selectedRoom=-1,screen=0,overlay=0,buildingRoom=-1,buildRemaining=0,incidentRoom=-1;
         boolean paused=false,event=false,gameOver=false,jobMenu=false;String eventTitle="",eventText="";String[] eventChoices=new String[2];
         int expeditionPerson=-1, expeditionLocation=-1, expeditionRemaining=0, selectedLocation=-1; boolean expeditionEvent=false;
         int W,H;float scale=1f;
@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();scale=W/420f;c.drawColor(bg);if(screen==0)drawMain(c);else if(screen==1)drawSurvivor(c);else if(screen==2)drawJournal(c);else if(screen==3)drawRooms(c);else if(screen==4)drawRoomDetail(c);else drawMap(c);if(event)drawEvent(c);if(jobMenu)drawJobMenu(c);if(gameOver)drawGameOver(c);}
         void drawHeader(Canvas c,String sub){bold(c,"ПОСЛЕДНИЙ ДОМ",20,30,20,text);txt(c,sub,20,49,11,muted);box(c,250,12,400,52,panel2,9);bold(c,"Д"+day+"  "+clock(),264,31,12,text);txt(c,phase(),264,46,9,phase().equals("НОЧЬ")?blue:accent);}
         void drawMain(Canvas c){
-            drawHeader(c,"убежище • v0.9.3 GAME HUD");
+            drawHeader(c,"убежище • v0.9.4 ЖИВОЕ УБЕЖИЩЕ • ЭТАП 2");
             drawResources(c);
             // The source image is now HOUSE ONLY: no baked HUD, resident cards or navigation.
             if(shelterBitmap!=null){
@@ -54,6 +54,8 @@ public class MainActivity extends Activity {
             drawTimeOfDayLighting(c);
             drawDynamicRoomState(c);
             drawRoomActivityEffects(c);
+            drawEmergencyEffects(c);
+            drawIncidentMarker(c);
             drawLivingResidentsOverShelter(c);
             drawResidentDock(c,578);
             float hh=H/scale;
@@ -135,11 +137,36 @@ public class MainActivity extends Activity {
                 for(int k=0;k<4;k++){p.setColor(Color.argb(210,255,177,64));c.drawCircle(sy(x-20+k*12),sy(y+25-(k%2)*8),sy(2),p);}
             }
         }
+        void drawEmergencyEffects(Canvas c){
+            float t=(System.currentTimeMillis()%4000L)/1000f;
+            // Short circuit: smoke, sparks and emergency flicker live inside the generator room.
+            if(event && eventTitle.equals("КОРОТКОЕ ЗАМЫКАНИЕ")){
+                float flick=(float)((Math.sin(t*18)+1)*.5);
+                p.setColor(Color.argb((int)(45+75*flick),210,48,28));c.drawRect(sy(12),sy(150),sy(210),sy(280),p);
+                for(int i=0;i<5;i++){float rise=(t*22+i*19)%72;float x=83+i*9+(float)Math.sin(t*2+i)*6;float y=248-rise;p.setColor(Color.argb(Math.max(20,115-(int)rise),105,105,100));c.drawCircle(sy(x),sy(y),sy(6+i*.8f),p);}
+                for(int i=0;i<5;i++){float a=t*5+i*1.25f;p.setColor(Color.argb(220,255,184,55));c.drawCircle(sy(128+(float)Math.cos(a)*18),sy(226+(float)Math.sin(a)*12),sy(1.8f),p);}
+            }
+            // Medical incident: pulsing monitor and a patient silhouette on the bed.
+            if(event && eventTitle.equals("БОЛЕЗНЬ")){
+                float pulse=(float)((Math.sin(t*7)+1)*.5);p.setColor(Color.argb(170,70,210,115));c.drawCircle(sy(180),sy(319),sy(3+2*pulse),p);
+                p.setColor(Color.rgb(186,145,115));c.drawCircle(sy(80),sy(355),sy(5),p);p.setColor(Color.rgb(80,86,82));c.drawRoundRect(sy(85),sy(350),sy(119),sy(361),sy(4),sy(4),p);
+            }
+            // Threat at the entrance: moving red searchlight / silhouettes outside barricades.
+            if(event && (eventTitle.equals("МАРОДЁРЫ")||eventTitle.equals("ЧУЖАК У ДВЕРИ"))){
+                float sweep=(float)Math.sin(t*1.7f);p.setColor(Color.argb(55,220,55,40));Path q=new Path();q.moveTo(sy(176),sy(445));q.lineTo(sy(48+sweep*22),sy(410));q.lineTo(sy(92+sweep*22),sy(520));q.close();c.drawPath(q,p);
+                p.setColor(Color.argb(190,22,22,22));for(int i=0;i<(eventTitle.equals("МАРОДЁРЫ")?3:1);i++){float xx=42+i*22;c.drawCircle(sy(xx),sy(464),sy(5),p);c.drawRect(sy(xx-4),sy(469),sy(xx+4),sy(486),p);}
+            }
+            // Construction now looks active rather than only showing a progress bar.
+            if(buildingRoom>=0){float[][] cc={{111,215},{309,215},{111,345},{309,345},{111,472},{309,472}};float x=cc[buildingRoom][0],y=cc[buildingRoom][1];for(int i=0;i<4;i++){float phase=(t*25+i*17)%38;p.setColor(Color.argb(210,255,174,55));c.drawLine(sy(x-18+i*10),sy(y+12),sy(x-24+i*10-phase*.15f),sy(y+12-phase*.45f),p);}}
+            postInvalidateDelayed(80);
+        }
         void drawLivingResidentsOverShelter(Canvas c){
             int[] slots={0,0,0,0,0,0};
             for(int i=0;i<people.size();i++){
                 Survivor s=people.get(i); int ri=homeRoomFor(s); if(ri<0) continue;
                 int slot=slots[ri]++; if(slot>2) continue; float[] q=shelterResidentPos(ri,slot);
+                float anim=(float)Math.sin(System.currentTimeMillis()/260.0+i*1.7);
+                if(!s.job.equals("Отдых")){q[0]+=anim*2.2f;q[1]+=Math.abs(anim)*1.2f;} else q[1]+=anim*.7f;
                 drawDynamicResident(c,s,q[0],q[1],i);
             }
         }
@@ -276,10 +303,11 @@ public class MainActivity extends Activity {
         void startUpgrade(int i){if(buildingRoom>=0){addLog("Сначала завершите текущее строительство.");return;}int cost=6+roomLevels[i]*4;if(mats<cost){addLog("Не хватает материалов: нужно "+cost+".");return;}mats-=cost;buildingRoom=i;buildRemaining=120+roomLevels[i]*90;addLog("Начато улучшение: "+rooms[i]+".");save();invalidate();}
         void repairRoom(int i){int cost=Math.max(1,(100-roomCondition[i])/15);if(roomCondition[i]>=95)return;if(mats>=cost){mats-=cost;roomCondition[i]=Math.min(100,roomCondition[i]+30);addLog(rooms[i]+": выполнен ремонт.");}save();}
         void processJobs(){int guards=0,medics=0;for(Survivor s:people)if(s.alive){s.fatigue=Math.max(0,Math.min(100,s.fatigue+(s.job.equals("Отдых")?-18:13)));if(s.job.equals("Еда"))food+=3+(s.role.equals("Сборщик")?s.skill:1)+roomLevels[1]/2;else if(s.job.equals("Вода"))water+=4;else if(s.job.equals("Материалы"))mats+=2+(s.role.equals("Механик")?2:0)+roomLevels[3]/2;else if(s.job.equals("Ремонт")){shelter=Math.min(100,shelter+3+s.skill);roomCondition[0]=Math.min(100,roomCondition[0]+2);}else if(s.job.equals("Охрана"))guards+=s.skill+roomLevels[4];else if(s.job.equals("Лечение"))medics+=s.skill+roomLevels[2];else{s.morale=Math.min(100,s.morale+4+roomLevels[5]/2);s.health=Math.min(100,s.health+2);}}threat=Math.max(0,threat-guards);if(medics>0)for(Survivor s:people)if(s.alive&&s.health<100)s.health=Math.min(100,s.health+medics/2);}
-        void triggerEvent(){event=true;int e=rnd.nextInt(5);if(e==0)ev("ЧУЖАК У ДВЕРИ","Ночью в дверь стучит незнакомец.","ВПУСТИТЬ","ОТКАЗАТЬ");else if(e==1)ev("КОРОТКОЕ ЗАМЫКАНИЕ","В генераторной пахнет гарью. Оборудование перегрелось.","РЕМОНТ","ОТКЛЮЧИТЬ");else if(e==2)ev("БОЛЕЗНЬ","Одному из жителей нужна помощь.","ЛЕЧИТЬ","ОТДЫХ");else if(e==3)ev("МАРОДЁРЫ","У входа замечены вооружённые люди.","ОТДАТЬ ЕДУ","ОБОРОНА");else ev("ТИХАЯ НОЧЬ","Дом наконец затих. Можно восстановить силы.","ОТДЫХ","ДЕЖУРИТЬ");}
+        void triggerEvent(){event=true;screen=0;overlay=0;int e=rnd.nextInt(5);incidentRoom=e==0?4:e==1?0:e==2?2:e==3?4:5;if(e==0)ev("ЧУЖАК У ДВЕРИ","Ночью в дверь стучит незнакомец.","ВПУСТИТЬ","ОТКАЗАТЬ");else if(e==1)ev("КОРОТКОЕ ЗАМЫКАНИЕ","В генераторной пахнет гарью. Оборудование перегрелось.","РЕМОНТ","ОТКЛЮЧИТЬ");else if(e==2)ev("БОЛЕЗНЬ","Одному из жителей нужна помощь.","ЛЕЧИТЬ","ОТДЫХ");else if(e==3)ev("МАРОДЁРЫ","У входа замечены вооружённые люди.","ОТДАТЬ ЕДУ","ОБОРОНА");else ev("ТИХАЯ НОЧЬ","Дом наконец затих. Можно восстановить силы.","ОТДЫХ","ДЕЖУРИТЬ");}
         void ev(String a,String b,String c,String d){eventTitle=a;eventText=b;eventChoices[0]=c;eventChoices[1]=d;}
-        void choose(int n){if(eventTitle.equals("ЧУЖАК У ДВЕРИ")){if(n==0){people.add(make("Алекс","Выживший",2));food=Math.max(0,food-2);addLog("В дом принят Алекс.");}else addLog("Чужаку отказали.");}else if(eventTitle.equals("КОРОТКОЕ ЗАМЫКАНИЕ")){if(n==0&&mats>=3){mats-=3;roomCondition[0]=Math.min(100,roomCondition[0]+25);addLog("Генераторную отремонтировали.");}else{power=Math.max(0,power-8);roomCondition[0]=Math.max(10,roomCondition[0]-18);addLog("Генераторная повреждена.");}}else if(eventTitle.equals("БОЛЕЗНЬ")){Survivor q=people.get(rnd.nextInt(people.size()));q.health=Math.max(1,q.health+(n==0?10:-12));addLog(n==0?"Больному помогли.":"Болезнь ослабила жителя.");}else if(eventTitle.equals("МАРОДЁРЫ")){if(n==0)food=Math.max(0,food-7);else{threat=Math.max(0,threat-roomLevels[4]*3);roomCondition[4]=Math.max(10,roomCondition[4]-8);}addLog("Столкновение у баррикад завершилось.");}else{for(Survivor s:people)if(s.alive)s.fatigue=Math.max(0,s.fatigue-(n==0?15:5));addLog("Ночь использовали с пользой.");}event=false;save();invalidate();}
-        void drawEvent(Canvas c){p.setColor(Color.argb(210,0,0,0));c.drawRect(0,0,W,H,p);float hh=H/scale,t=hh*.24f,b=hh*.73f;box(c,22,t,398,b,panel,18);txt(c,"СОБЫТИЕ",44,t+32,10,accent);bold(c,eventTitle,44,t+62,19,text);wrap(c,eventText,44,t+96,376,12,muted,18);for(int i=0;i<2;i++){float y=b-105+i*50;box(c,44,y,376,y+40,i==0?accent:panel2,10);bold(c,eventChoices[i],60,y+25,11,i==0?Color.rgb(30,27,23):text);}}
+        void choose(int n){if(eventTitle.equals("ЧУЖАК У ДВЕРИ")){if(n==0){people.add(make("Алекс","Выживший",2));food=Math.max(0,food-2);addLog("В дом принят Алекс.");}else addLog("Чужаку отказали.");}else if(eventTitle.equals("КОРОТКОЕ ЗАМЫКАНИЕ")){if(n==0&&mats>=3){mats-=3;roomCondition[0]=Math.min(100,roomCondition[0]+25);addLog("Генераторную отремонтировали.");}else{power=Math.max(0,power-8);roomCondition[0]=Math.max(10,roomCondition[0]-18);addLog("Генераторная повреждена.");}}else if(eventTitle.equals("БОЛЕЗНЬ")){Survivor q=people.get(rnd.nextInt(people.size()));q.health=Math.max(1,q.health+(n==0?10:-12));addLog(n==0?"Больному помогли.":"Болезнь ослабила жителя.");}else if(eventTitle.equals("МАРОДЁРЫ")){if(n==0)food=Math.max(0,food-7);else{threat=Math.max(0,threat-roomLevels[4]*3);roomCondition[4]=Math.max(10,roomCondition[4]-8);}addLog("Столкновение у баррикад завершилось.");}else{for(Survivor s:people)if(s.alive)s.fatigue=Math.max(0,s.fatigue-(n==0?15:5));addLog("Ночь использовали с пользой.");}event=false;incidentRoom=-1;save();invalidate();}
+        void drawIncidentMarker(Canvas c){if(!event||incidentRoom<0)return;float[][] centers={{109,214},{311,214},{109,344},{311,344},{109,474},{311,474}};float x=centers[incidentRoom][0],y=centers[incidentRoom][1];float pulse=(float)((Math.sin(System.currentTimeMillis()/180.0)+1)*.5);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sy(2.5f));p.setColor(Color.argb(180,danger>>16&255,danger>>8&255,danger&255));c.drawCircle(sy(x),sy(y),sy(24+pulse*8),p);p.setStyle(Paint.Style.FILL);box(c,x-13,y-13,x+13,y+13,danger,13);bold(c,"!",x-3.5f,y+6,16,Color.WHITE);}
+        void drawEvent(Canvas c){float hh=H/scale,t=Math.max(455,hh-310),b=hh-84;p.setColor(Color.argb(75,0,0,0));c.drawRect(0,sy(t-18),W,H,p);box(c,18,t,402,b,Color.rgb(24,27,32),18);txt(c,"СОБЫТИЕ В УБЕЖИЩЕ",38,t+28,9,accent);bold(c,eventTitle,38,t+55,17,text);wrap(c,eventText,38,t+82,382,11,muted,16);float by=b-98;box(c,36,by,384,by+39,accent,10);bold(c,eventChoices[0],52,by+25,11,Color.rgb(30,27,23));box(c,36,by+48,384,by+87,panel2,10);bold(c,eventChoices[1],52,by+73,11,text);}
         void drawJobMenu(Canvas c){p.setColor(Color.argb(205,0,0,0));c.drawRect(0,0,W,H,p);float t=110;box(c,30,t,390,t+410,panel,16);bold(c,"НАЗНАЧИТЬ РАБОТУ",50,t+35,17,text);for(int i=0;i<jobs.length;i++){float y=t+55+i*45;box(c,48,y,372,y+36,panel2,8);bold(c,jobs[i],64,y+24,11,text);}}
         void drawGameOver(Canvas c){p.setColor(Color.argb(230,0,0,0));c.drawRect(0,0,W,H,p);float hh=H/scale;bold(c,"ПОСЛЕДНИЙ ДОМ ПАЛ",54,hh/2-60,22,text);txt(c,"Вы продержались "+day+" дней",110,hh/2-25,13,muted);box(c,55,hh/2+25,365,hh/2+82,accent,14);bold(c,"НАЧАТЬ ЗАНОВО",132,hh/2+60,13,Color.rgb(30,27,23));}
         void wrap(Canvas c,String s,float x,float y,float max,float size,int col,float step){p.setTextSize(sy(size));String[] ws=s.split(" ");String line="";float yy=y;for(String w:ws){if(p.measureText(line+w)>sy(max-x)){txt(c,line,x,yy,size,col);yy+=step;line="";}line+=w+" ";}txt(c,line,x,yy,size,col);}
@@ -287,7 +315,7 @@ public class MainActivity extends Activity {
         @Override public boolean onTouchEvent(MotionEvent e){
             if(e.getAction()!=MotionEvent.ACTION_UP)return true; float x=e.getX()/scale,y=e.getY()/scale,hh=H/scale;
             if(gameOver){if(y>hh/2)reset();return true;}
-            if(event){float b=hh*.73f;if(y>=b-105&&y<=b-65)choose(0);else if(y>=b-55&&y<=b-15)choose(1);return true;}
+            if(event){float b=hh-84,by=b-98;if(y>=by&&y<=by+39)choose(0);else if(y>=by+48&&y<=by+87)choose(1);return true;}
             if(jobMenu){float t=110;for(int i=0;i<jobs.length;i++){float yy=t+55+i*45;if(y>=yy&&y<=yy+36){people.get(selected).job=jobs[i];jobMenu=false;overlay=1;addLog(people.get(selected).name+": "+jobs[i]+".");save();invalidate();return true;}}jobMenu=false;invalidate();return true;}
             if(screen==0 && overlay!=0){float top=(overlay==3?Math.max(250,hh-470):overlay==1?Math.max(285,hh-405):Math.max(300,hh-390));if(y<top||x>350&&y<top+55){overlay=0;invalidate();return true;}if(overlay==1){if(y>=top+211&&y<=top+257){jobMenu=true;invalidate();return true;}if(y>=top+266&&y<=top+309&&x<210){people.get(selected).job="Отдых";save();invalidate();return true;}if(y>=top+266&&y<=top+309&&x>=210){overlay=0;invalidate();return true;}}else if(overlay==2){if(y>=top+202&&y<=top+250){startUpgrade(selectedRoom);invalidate();return true;}if(y>=top+259&&y<=top+302&&x<210){int idx=-1;for(int i=0;i<people.size();i++)if(people.get(i).alive){idx=i;break;}if(idx>=0){selected=idx;jobMenu=true;}invalidate();return true;}if(y>=top+259&&y<=top+302&&x>=210){overlay=0;invalidate();return true;}}else if(overlay==3){float yy=top+65;for(int i=0;i<Math.min(6,people.size());i++,yy+=59)if(y>=yy&&y<=yy+52){selected=i;overlay=1;invalidate();return true;}}return true;}
             if(screen==0){
