@@ -1,0 +1,14 @@
+# Private signing material must never be committed.
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.keystore.base64
+*.jks.base64
+*.p12.base64
+*.pfx.base64
+
+# Local Android configuration and generated output.
+local.properties
+.gradle/
+build/

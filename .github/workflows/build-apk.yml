@@ -7,6 +7,9 @@ on:
       - main
       - master
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,11 +36,58 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
+      - name: Restore permanent signing key
+        shell: bash
+        env:
+          LAST_HOUSE_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          LAST_HOUSE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          LAST_HOUSE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          LAST_HOUSE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in LAST_HOUSE_KEYSTORE_BASE64 LAST_HOUSE_STORE_PASSWORD LAST_HOUSE_KEY_ALIAS LAST_HOUSE_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required signing secret is missing ($name). See BUILD_APK.md."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$LAST_HOUSE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/last-house.keystore"
+          test -s "$RUNNER_TEMP/last-house.keystore"
+          # Re-running one workflow run rebuilds the same version; a new run increments it.
+          echo "LAST_HOUSE_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+
       - name: Build APK
-        run: gradle assembleDebug --stacktrace
+        env:
+          LAST_HOUSE_REQUIRE_SIGNING: 'true'
+          LAST_HOUSE_KEYSTORE_PATH: ${{ runner.temp }}/last-house.keystore
+          LAST_HOUSE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          LAST_HOUSE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          LAST_HOUSE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle assembleDebug -PlastHouseVersionCode="$LAST_HOUSE_VERSION_CODE" --stacktrace
+
+      - name: Verify APK identity and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          badging=$("$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$apk")
+          [[ "$badging" == *"package: name='com.lastdom.game'"* ]]
+          [[ "$badging" == *"versionCode='$LAST_HOUSE_VERSION_CODE'"* ]]
+          printf '%s\n' "$badging" > app/build/outputs/apk/debug/apk-identity.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk" | tee app/build/outputs/apk/debug/apk-signing.txt
+
+      - name: Remove temporary keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/last-house.keystore"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LastHouse-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: LastHouse-debug-apk-${{ env.LAST_HOUSE_VERSION_CODE }}
+          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/apk-identity.txt
+            app/build/outputs/apk/debug/apk-signing.txt

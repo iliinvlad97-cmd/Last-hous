@@ -1,5 +1,48 @@
 plugins { id 'com.android.application' }
 
+// CI supplies a monotonically increasing code; local builds use the next source version.
+def requestedVersionCode = providers.gradleProperty('lastHouseVersionCode').getOrElse('96')
+if (!(requestedVersionCode ==~ /[0-9]+/)) {
+    throw new GradleException('lastHouseVersionCode must be an integer.')
+}
+def apkVersionCode = new BigInteger(requestedVersionCode)
+if (apkVersionCode < 96 || apkVersionCode > 2100000000) {
+    throw new GradleException('lastHouseVersionCode must be between 96 and 2100000000.')
+}
+
+// Passwords are read only from the process environment, never from tracked files.
+def signingNames = ['LAST_HOUSE_KEYSTORE_PATH', 'LAST_HOUSE_STORE_PASSWORD',
+                    'LAST_HOUSE_KEY_ALIAS', 'LAST_HOUSE_KEY_PASSWORD']
+def signingValues = signingNames.collectEntries { name ->
+    [(name): providers.environmentVariable(name).orNull]
+}
+def usePersistentSigning = signingValues.values().any { it != null } ||
+        providers.environmentVariable('LAST_HOUSE_REQUIRE_SIGNING').getOrElse('false') == 'true'
+if (usePersistentSigning) {
+    def missing = signingNames.findAll { signingValues[it] == null || signingValues[it].isEmpty() }
+    if (!missing.isEmpty()) {
+        throw new GradleException('Persistent APK signing requires: ' + missing.join(', '))
+    }
+    if (!file(signingValues.LAST_HOUSE_KEYSTORE_PATH).isFile()) {
+        throw new GradleException('LAST_HOUSE_KEYSTORE_PATH must point to an existing keystore.')
+    }
+}
+
 android { namespace 'com.lastdom.game'; compileSdk 36
-    defaultConfig { applicationId 'com.lastdom.game'; minSdk 24; targetSdk 36; versionCode 95; versionName '0.9.5.4' }
+    defaultConfig { applicationId 'com.lastdom.game'; minSdk 24; targetSdk 36; versionCode apkVersionCode.intValue(); versionName '0.9.5.5' }
+
+    if (usePersistentSigning) {
+        signingConfigs {
+            persistent {
+                storeFile file(signingValues.LAST_HOUSE_KEYSTORE_PATH)
+                storePassword signingValues.LAST_HOUSE_STORE_PASSWORD
+                keyAlias signingValues.LAST_HOUSE_KEY_ALIAS
+                keyPassword signingValues.LAST_HOUSE_KEY_PASSWORD
+            }
+        }
+        buildTypes {
+            debug { signingConfig signingConfigs.persistent }
+            release { signingConfig signingConfigs.persistent }
+        }
+    }
 }
