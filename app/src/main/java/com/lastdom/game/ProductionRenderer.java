@@ -143,6 +143,9 @@ final class ProductionRenderer {
     GameController g = view.game;
     ProductionController p = g.productionController;
     normal(rows, "Производство еды: 0. Функция: приготовление запасов");
+    muted(
+        rows,
+        "Еду добывает отряд в городе. Кухня её не создаёт: повара растягивают имеющиеся запасы");
     bonus(rows, 1);
     condition(rows, 1);
     good(

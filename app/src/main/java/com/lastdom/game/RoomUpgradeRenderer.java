@@ -26,25 +26,33 @@ final class RoomUpgradeRenderer {
         c,
         view.roomUpgradePanel.choosing
             ? "ВЫБОР СТРОИТЕЛЯ"
-            : game.rooms[room].toUpperCase(java.util.Locale.ROOT),
+            : view.roomUpgradePanel.assigning
+                ? "ВЫБОР ЖИТЕЛЯ"
+                : game.rooms[room].toUpperCase(java.util.Locale.ROOT),
         30,
         layout.top + 35,
         17,
         view.text);
     view.txt(
         c,
-        "Уровень "
-            + game.roomLevels[room]
-            + (room == 4
-                ? " • прочность баррикад " + game.raidController.durability
-                : " • состояние " + game.roomCondition[room])
-            + "%",
+        view.roomUpgradePanel.assigning
+            ? game.rooms[room] + " • " + view.roomUpgradePanel.assignmentJob
+            : "Уровень "
+                + game.roomLevels[room]
+                + (room == 4
+                    ? " • прочность баррикад " + game.raidController.durability
+                    : " • состояние " + game.roomCondition[room])
+                + "%",
         30,
         layout.top + 63,
         12,
         view.accent);
     if (view.roomUpgradePanel.choosing) {
       drawBuilders(c, layout);
+      return;
+    }
+    if (view.roomUpgradePanel.assigning) {
+      drawWorkers(c, layout);
       return;
     }
     RoomUpgradeTask active = game.roomUpgradeController.active();
@@ -100,6 +108,60 @@ final class RoomUpgradeRenderer {
     view.txt(c, "‹ Назад", 34, layout.pageY, 11, view.muted);
     view.txt(c, (page + 1) + " / " + pages, 190, layout.pageY, 11, view.text);
     view.txt(c, "Далее ›", 326, layout.pageY, 11, view.muted);
+    button(c, 30, layout.actionTop, 390, 48, "НАЗАД К КОМНАТЕ", false);
+    button(c, 30, layout.secondaryTop, 390, 43, "ЗАКРЫТЬ", false);
+  }
+
+  private void drawWorkers(Canvas c, RoomUpgradeLayout layout) {
+    RoomUpgradePanelController panel = view.roomUpgradePanel;
+    panel.refreshWorkers();
+    boolean kitchen = view.game.selectedRoom == 1;
+    if (kitchen) {
+      button(c, 30, layout.top + 78, 206, 40, "ГОТОВИТЬ ЕДУ", panel.assignmentJob.equals("Еда"));
+      button(c, 214, layout.top + 78, 390, 40, "ДОБЫВАТЬ ВОДУ", panel.assignmentJob.equals("Вода"));
+    }
+    int capacity = layout.workerCapacity(kitchen);
+    int pages = Math.max(1, (panel.workerIds.size() + capacity - 1) / capacity);
+    panel.page = Math.min(panel.page, pages - 1);
+    for (int row = 0; row < capacity; row++) {
+      int index = panel.page * capacity + row;
+      if (index >= panel.workerIds.size()) break;
+      Resident resident = view.game.expeditionController.resident(panel.workerIds.get(index));
+      float top = layout.workerRowTop(kitchen) + row * 64;
+      view.box(c, 30, top, 390, top + 56, view.panel2, 9);
+      view.residentRenderer.drawMiniPortrait(
+          c, resident, 50, top + 24, view.game.people.indexOf(resident));
+      view.bold(c, resident.name + " • " + resident.role, 74, top + 20, 12, view.text);
+      view.txt(c, "Сейчас: " + resident.job, 74, top + 36, 11, view.muted);
+      view.txt(
+          c,
+          "Здоровье " + resident.health + "% • усталость " + resident.fatigue + "%",
+          74,
+          top + 50,
+          11,
+          view.good);
+    }
+    if (panel.workerIds.isEmpty()) {
+      view.txt(
+          c,
+          "Нет доступных жителей для назначения",
+          30,
+          layout.workerRowTop(kitchen) + 24,
+          12,
+          view.muted);
+      view.txt(
+          c,
+          "Занятые и уже назначенные не показаны",
+          30,
+          layout.workerRowTop(kitchen) + 44,
+          11,
+          view.muted);
+    }
+    view.txt(c, "‹ Назад", 34, layout.pageY, 11, view.muted);
+    view.txt(c, (panel.page + 1) + " / " + pages, 190, layout.pageY, 11, view.text);
+    view.txt(c, "Далее ›", 326, layout.pageY, 11, view.muted);
+    if (!panel.message.isEmpty())
+      view.txt(c, panel.message, 30, layout.actionTop - 7, 10, view.danger);
     button(c, 30, layout.actionTop, 390, 48, "НАЗАД К КОМНАТЕ", false);
     button(c, 30, layout.secondaryTop, 390, 43, "ЗАКРЫТЬ", false);
   }

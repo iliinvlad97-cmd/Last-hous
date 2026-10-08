@@ -4,8 +4,11 @@ package com.lastdom.game;
 final class RoomUpgradePanelController {
   private final GameController game;
   Runnable defenseOpen = () -> {};
-  boolean choosing;
+  boolean choosing, assigning;
   String builderId = "", message = "";
+  String assignmentJob = "";
+  // IDs of the visible candidates, so a stale tap can never select a different resident.
+  final java.util.ArrayList<String> workerIds = new java.util.ArrayList<>();
   int page, scroll, lineCount;
   private boolean dragging, moved;
   private float dragY, startY;
@@ -18,6 +21,9 @@ final class RoomUpgradePanelController {
     game.selectedRoom = room;
     game.overlay = 2;
     choosing = false;
+    assigning = false;
+    workerIds.clear();
+    assignmentJob = RoomUpgradeConfig.valid(room) ? game.roomJobs[room] : "";
     builderId = "";
     message = "";
     page = scroll = lineCount = 0;
@@ -27,10 +33,12 @@ final class RoomUpgradePanelController {
     if (game.screen == 4) game.screen = GameView.HOME;
     game.overlay = 0;
     choosing = false;
+    assigning = false;
+    workerIds.clear();
   }
 
   boolean scrollTouch(int action, float y, RoomUpgradeLayout layout) {
-    if (choosing) return false;
+    if (choosing || assigning) return false;
     if (action == android.view.MotionEvent.ACTION_DOWN) {
       dragging = y >= layout.top + 75 && y < layout.actionTop - 24;
       startY = dragY = y;
@@ -63,6 +71,10 @@ final class RoomUpgradePanelController {
   void touch(float x, float y, RoomUpgradeLayout layout) {
     if (y < layout.top || y > layout.bottom || (x > 350 && y < layout.top + 52)) {
       close();
+      return;
+    }
+    if (assigning) {
+      touchWorkers(x, y, layout);
       return;
     }
     if (choosing) {
@@ -111,20 +123,61 @@ final class RoomUpgradePanelController {
           defenseOpen.run();
           return;
         }
-        int selected = -1;
-        for (int i = 0; i < game.people.size(); i++)
-          if (game.roomUpgradeController.unavailableReason(game.people.get(i)).isEmpty()) {
-            selected = i;
-            break;
-          }
-        if (selected >= 0) {
-          game.selected = selected;
-          game.jobMenu = true;
-        } else {
-          message = "Нет доступных жителей для назначения";
-          scroll = 0;
-        }
+        assigning = true;
+        assignmentJob = game.roomJobs[game.selectedRoom];
+        page = scroll = 0;
+        message = "";
+        refreshWorkers();
       }
     }
+  }
+
+  void refreshWorkers() {
+    workerIds.clear();
+    for (Resident resident : game.people)
+      if (game.roomAssignmentController
+          .unavailableReason(game.selectedRoom, assignmentJob, resident)
+          .isEmpty()) workerIds.add(resident.id);
+  }
+
+  private void touchWorkers(float x, float y, RoomUpgradeLayout layout) {
+    boolean kitchen = game.selectedRoom == 1;
+    if (kitchen && y >= layout.top + 78 && y <= layout.top + 118) {
+      if (x >= 30 && x <= 206) assignmentJob = "Еда";
+      else if (x >= 214 && x <= 390) assignmentJob = "Вода";
+      else return;
+      page = 0;
+      message = "";
+      refreshWorkers();
+      return;
+    }
+    int capacity = layout.workerCapacity(kitchen);
+    float rowTop = layout.workerRowTop(kitchen);
+    int row = (int) ((y - rowTop) / 64), index = page * capacity + row;
+    if (x >= 30
+        && x <= 390
+        && y >= rowTop
+        && y < layout.pageY - 16
+        && row < capacity
+        && (y - rowTop) % 64 <= 56
+        && index < workerIds.size()) {
+      String id = workerIds.get(index);
+      message = game.roomAssignmentController.assign(game.selectedRoom, assignmentJob, id);
+      if (message.isEmpty()) {
+        Resident resident = game.expeditionController.resident(id);
+        message = resident.name + ": " + assignmentJob + ".";
+        assigning = false;
+        scroll = 0;
+        // A worker can no longer be the pending builder of this panel.
+        if (builderId.equals(id)) builderId = "";
+      } else refreshWorkers();
+    } else if (y >= layout.pageY - 16 && y <= layout.pageY + 12) {
+      int pages = Math.max(1, (workerIds.size() + capacity - 1) / capacity);
+      if (x < 120) page = Math.max(0, page - 1);
+      else if (x > 300) page = Math.min(pages - 1, page + 1);
+    } else if (layout.action(x, y)) {
+      assigning = false;
+      message = "";
+    } else if (layout.secondary(y)) close();
   }
 }

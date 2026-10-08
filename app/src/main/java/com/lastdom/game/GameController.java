@@ -10,6 +10,7 @@ class GameController extends GameState {
 
   final ExpeditionController expeditionController = new ExpeditionController(this);
   final RoomUpgradeController roomUpgradeController = new RoomUpgradeController(this);
+  final RoomAssignmentController roomAssignmentController = new RoomAssignmentController(this);
   final SurvivalController survivalController = new SurvivalController(this);
   final ProductionController productionController = new ProductionController(this);
   final RaidController raidController = new RaidController(this);

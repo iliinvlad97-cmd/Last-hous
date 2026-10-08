@@ -23,4 +23,12 @@ final class RoomUpgradeLayout {
   boolean secondary(float y) {
     return y >= secondaryTop && y <= secondaryTop + 43;
   }
+
+  float workerRowTop(boolean kitchen) {
+    return rowTop + (kitchen ? 48 : 0);
+  }
+
+  int workerCapacity(boolean kitchen) {
+    return Math.max(1, (int) ((pageY - 16 - workerRowTop(kitchen)) / 64));
+  }
 }

@@ -119,7 +119,7 @@ public class RegressionProbe {
   }
   GameView v=fresh(420,640);for(int i=0;i<8;i++)v.game.people.add(v.game.make("Новый "+i,"Житель",2));for(Resident resident:v.game.people)resident.fatigue=0;v.game.mats=100;v.roomUpgradePanel.open(0);RoomUpgradeLayout l=new RoomUpgradeLayout(640);tap(v,180,l.actionTop+20);while(v.roomUpgradePanel.page<12/l.capacity)tap(v,355,l.pageY);tap(v,180,l.rowTop+(12%l.capacity)*64+25);require(v.roomUpgradePanel.builderId.equals(v.game.people.get(12).id),"builder paging reaches all residents");
   v=fresh(420,840);v.game.mats=100;v.game.expeditionController.start("shop",ids(v,0));v.roomUpgradePanel.open(0);l=new RoomUpgradeLayout(840);tap(v,180,l.actionTop+20);text(draw(v),"В экспедиции");tap(v,180,l.rowTop+25);require(v.roomUpgradePanel.choosing&&v.roomUpgradePanel.builderId.isEmpty()&&task(v)==null,"unavailable row cannot select builder");
-  v=fresh(420,840);v.game.mats=100;v.roomUpgradePanel.open(0);l=new RoomUpgradeLayout(840);tap(v,100,l.secondaryTop+20);require(v.game.jobMenu,"original work assignment retained");
+  v=fresh(420,840);v.game.mats=100;v.roomUpgradePanel.open(0);l=new RoomUpgradeLayout(840);tap(v,100,l.secondaryTop+20);require(v.roomUpgradePanel.assigning&&!v.game.jobMenu,"room-specific resident assignment replaces arbitrary first resident job menu");
  }
  public static void main(String[] args){cycles();invalid();bonuses();integration();migration();ui();System.out.println("PASS: "+checks+" shelter upgrade assertions; all 12 upgrades, atomic costs/completion, builder AI/expedition exclusion, clock/pause, fractional production/healing/rest/defense, restarts, legacy migration, six screen sizes, paging/scroll/touch and existing ground anchors.");}
 }
