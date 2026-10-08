@@ -75,7 +75,7 @@ public class RegressionProbe {
    g.people.get(3).job="Материалы";g.people.get(4).job="Ремонт";require(g.findBestResident("Инженер","")>=3,"AI excludes participants and chooses a working resident");
    g.people.get(3).job="Материалы";g.people.get(4).job="Ремонт";
    int health=g.people.get(0).health,fatigue=g.people.get(0).fatigue;g.processJobs();
-   require(g.mats>mats,"remaining worker produces");require(g.people.get(0).health==health&&g.people.get(0).fatigue==fatigue,"away not processed as home worker");
+   require(g.mats==mats&&g.productionController.workshopSavingBasis()>0,"remaining workshop worker conserves materials without free generation");require(g.people.get(0).health==health&&g.people.get(0).fatigue==fatigue,"away not processed as home worker");
    g.mats=mats;power=g.power; // processJobs now also runs the Stage 5 generator.
    g.people.get(3).job="Отдых";g.people.get(4).job="Отдых";
    nav(v,3);text(draw(v),"В экспедиции");g.selected=0;g.overlay=1;draw(v);

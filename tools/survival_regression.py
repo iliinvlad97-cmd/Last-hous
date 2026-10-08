@@ -29,7 +29,7 @@ public class RegressionProbe {
  static void minutes(GameView v,int n){for(int i=0;i<n;i++)v.game.advanceMinute();}
  static Resident only(GameView v){for(int i=1;i<v.game.people.size();i++)v.game.people.get(i).alive=false;return v.game.people.get(0);}
  static String state(GameView v){v.game.save();return Context.preferences.values.toString();}
- static void invariant(GameView v){Set<String> ids=new HashSet<>();for(Resident r:v.game.people){require(ids.add(r.id),"unique resident");for(int n:new int[]{r.health,r.hunger,r.thirst,r.fatigue,r.morale})require(n>=0&&n<=100,"bounded condition");require(r.foodMinutes>=0&&r.foodMinutes<=1440&&r.waterMinutes>=0&&r.waterMinutes<=1440,"bounded rations");}require(v.game.food>=0&&v.game.water>=0&&v.game.mats>=0,"nonnegative resources");}
+ static void invariant(GameView v){Set<String> ids=new HashSet<>();for(Resident r:v.game.people){require(ids.add(r.id),"unique resident");for(int n:new int[]{r.health,r.hunger,r.thirst,r.fatigue,r.morale})require(n>=0&&n<=100,"bounded condition");require(r.foodMinutes>=0&&r.foodMinutes<=ProductionConfig.MAX_FOOD_MINUTES&&r.waterMinutes>=0&&r.waterMinutes<=1440,"bounded rations");}require(v.game.food>=0&&v.game.water>=0&&v.game.mats>=0,"nonnegative resources");}
  static void needs(){
   GameView v=fresh();Resident r=only(v);r.job="Материалы";v.game.food=v.game.water=0;int h=r.health,m=r.morale;
   minutes(v,720);require(r.hunger==22&&r.thirst==27&&r.fatigue==25,"half-day smooth rates 25/35/30, not daily jumps");
@@ -58,9 +58,9 @@ public class RegressionProbe {
   r.morale=75;r.health=50;r.hunger=50;r.thirst=80;r.fatigue=95;double expected=.5*.9*.65*.4;
   close(SurvivalConfig.efficiency(r),expected,"all condition factors exactly once");for(int i=0;i<100;i++)close(SurvivalConfig.efficiency(r),expected,"idempotent efficiency query");
   GameView v=fresh();r=only(v);r.job="Еда";r.hunger=r.thirst=r.fatigue=0;r.health=100;r.morale=75;v.game.roomLevels[1]=2;int food=v.game.food;
-  for(int i=0;i<1440;i++)v.game.survivalController.produce(1);require(v.game.food-food==4,"4.8 production floor");v.game.save();v=kill();r=v.game.people.get(0);
-  for(int i=0;i<1440;i++)v.game.survivalController.produce(1);require(v.game.food-food==9,"9.6, persisted fractional output, room bonus once");
-  r.health=50;food=v.game.food;v.game.productionRemainders.values.put("survival6_food",0);for(int i=0;i<1440;i++)v.game.survivalController.produce(1);require(v.game.food-food==2,"condition reduces actual output (2.4)");
+  for(int i=0;i<1440;i++)v.game.survivalController.produce(1);require(v.game.food==food&&v.game.productionController.kitchenSavingBasis()==1500,"cooking conserves inputs with 15 percent improved efficiency");v.game.save();v=kill();r=v.game.people.get(0);
+  for(int i=0;i<1440;i++)v.game.survivalController.produce(1);require(v.game.food==food&&v.game.productionController.foodRationMinutes()==1694,"cooking saving survives restart without generating food");
+  r.health=50;food=v.game.food;v.game.productionRemainders.values.put("survival6_food",0);for(int i=0;i<1440;i++)v.game.survivalController.produce(1);require(v.game.food==food&&v.game.productionController.kitchenSavingBasis()==756,"health penalty once on rounded cooking quality");
   v.game.food=Integer.MAX_VALUE;v.game.water=Integer.MAX_VALUE;r.health=100;v.game.processJobs();require(v.game.food==Integer.MAX_VALUE,"safe production overflow");
   v=fresh();r=only(v);r.job="Материалы";r.fatigue=0;v.game.food=v.game.water=100;r.morale=20;minutes(v,1440);require(r.morale>20,"good conditions recover morale gradually");
   int before=r.morale;v.game.survivalController.injury(r,12);require(r.morale==before-6,"injury lowers morale once at controller effect");
@@ -69,13 +69,13 @@ public class RegressionProbe {
   for(int level=1;level<=3;level++){
    GameView v=fresh();Resident r=only(v);r.fatigue=100;r.job="Отдых";v.game.roomLevels[5]=level;v.game.food=v.game.water=100;
    minutes(v,60);require(100-r.fatigue==new int[]{5,7,10}[level-1],"bedroom hourly recovery/room bonus "+level);v.game.save();int fatigue=r.fatigue;v=kill();r=v.game.people.get(0);require(r.fatigue==fatigue&&r.job.equals("Отдых"),"rest state reload");
-   v=fresh();for(int i=2;i<5;i++)v.game.people.get(i).alive=false;r=v.game.people.get(0);Resident doctor=v.game.people.get(1);r.health=40;r.job="Вода";doctor.job="Лечение";doctor.fatigue=0;v.game.food=v.game.water=100;v.game.roomLevels[2]=level;
+   v=fresh();for(int i=2;i<5;i++)v.game.people.get(i).alive=false;r=v.game.people.get(0);Resident doctor=v.game.people.get(1);r.health=40;r.job="Вода";doctor.job="Лечение";doctor.fatigue=0;v.game.expeditionWarehouse.set(ExpeditionLoot.Resource.MEDICINE,2);v.game.food=v.game.water=100;v.game.roomLevels[2]=level;
    minutes(v,1440);require(r.health-40==2*RoomUpgradeConfig.percent(2,level)/100,"existing base2 healing, room bonus "+level);
    doctor.job="Отдых";int health=r.health;minutes(v,1440);require(r.health==health,"no staff no medical healing for worker");
   }
   GameView v=fresh();Resident r=only(v);r.job="Материалы";r.fatigue=80;v.game.food=v.game.water=100;minutes(v,1);require(r.job.equals("Отдых")&&r.autoRecovery&&r.resumeJob.equals("Материалы"),"AI sends exhausted worker to rest");v.game.save();v=kill();r=v.game.people.get(0);require(r.autoRecovery&&r.resumeJob.equals("Материалы"),"AI resume assignment saved");
   minutes(v,4*1440);require(r.fatigue<80&&!r.job.equals("Экспедиция"),"AI rests and safely resumes work");
-  v=fresh();for(int i=2;i<5;i++)v.game.people.get(i).alive=false;r=v.game.people.get(0);v.game.people.get(1).job="Лечение";r.job="Материалы";r.health=30;minutes(v,1);require(r.job.equals("Лечится")&&v.game.homeRoomFor(r)==2&&!v.game.survivalController.working(r),"patient AI medpoint, not production staff");v.game.save();v=kill();r=v.game.people.get(0);require(r.job.equals("Лечится")&&r.autoRecovery,"treatment reload");
+  v=fresh();for(int i=2;i<5;i++)v.game.people.get(i).alive=false;r=v.game.people.get(0);v.game.people.get(1).job="Лечение";v.game.expeditionWarehouse.set(ExpeditionLoot.Resource.MEDICINE,2);r.job="Материалы";r.health=30;minutes(v,1);require(r.job.equals("Лечится")&&v.game.homeRoomFor(r)==2&&!v.game.survivalController.working(r),"patient AI medpoint, not production staff");v.game.save();v=kill();r=v.game.people.get(0);require(r.job.equals("Лечится")&&r.autoRecovery,"treatment reload");
   v.game.people.get(1).job="Отдых";minutes(v,1);require(r.job.equals("Отдых")&&r.autoRecovery,"missing doctor falls back to bedroom, no recovery deadlock");int health=r.health;minutes(v,1440);require(r.health>health,"injured resident still recovers without medical staff");
  }
  static void builderAndExpedition(){
@@ -106,7 +106,7 @@ public class RegressionProbe {
   int food=v.game.food;int morale=r.morale;v.game.expeditionController.chooseEvent(id,1);require(r.health<100&&r.morale<morale,"city injury actually lowers morale");int health=r.health,after=r.morale;v.game.save();v=kill();r=v.game.people.get(0);require(r.health==health&&r.morale==after,"city injury morale restored");v.game.expeditionController.chooseEvent(id,1);require(r.health==health&&r.morale==after,"city injury morale never applied twice");
   e=v.game.expeditionController.active();int elapsed=e.elapsedMinutes();minutes(v,120);require(e.elapsedMinutes()==elapsed&&r.hunger>10,"waiting decision freezes expedition, not survivor needs");require(v.game.food==food-4,"only four home residents purchase rations during decision");
   v=fresh();r=only(v);v.game.food=v.game.water=0;r.fatigue=80;r.job="Экспедиция";minutes(v,1);long first=v.game.log.stream().filter(t->t.contains("Житель сильно устал")).count();r.hunger=90;minutes(v,1);require(first==1&&v.game.log.stream().anyMatch(t->t.contains("Критический голод")),"a fatigue warning cannot suppress a new critical hunger warning");
-  v=fresh();v.game.roomLevels[1]=3;r=v.game.people.get(3);r.job="Еда";require(v.game.survivalController.workPercent(r)==140,"resident UI reports room bonus in real work efficiency");r.job="Отдых";require(v.game.survivalController.workPercent(r)==0,"rest is not reported as production");
+  v=fresh();v.game.roomLevels[1]=3;r=v.game.people.get(3);r.job="Еда";require(v.game.survivalController.workPercent(r)==168,"resident UI includes cooking profession and room bonus once");r.job="Отдых";require(v.game.survivalController.workPercent(r)==0,"rest is not reported as production");
  }
  static void ui(){
   for(int width:new int[]{420,840})for(int height:new int[]{640,840,1200}){

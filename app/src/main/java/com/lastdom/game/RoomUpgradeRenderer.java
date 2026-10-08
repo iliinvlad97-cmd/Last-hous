@@ -7,9 +7,11 @@ import java.util.List;
 /** Read-only room information, accessible fixed buttons and optional subtle artwork badges. */
 final class RoomUpgradeRenderer {
   private final GameView view;
+  private final ProductionRenderer production;
 
   RoomUpgradeRenderer(GameView view) {
     this.view = view;
+    this.production = new ProductionRenderer(view);
   }
 
   void draw(Canvas c) {
@@ -46,18 +48,36 @@ final class RoomUpgradeRenderer {
             + ": "
             + effectValue(room, game.roomLevels[room])
             + (room == 5 ? "" : " от базовой"));
-    lines.add((room == 5 ? "Отдыхают: " : "Работают: ") + game.occupants(room));
-    for (Resident resident : game.people)
-      if (game.homeRoomFor(resident) == room && game.survivalController.working(resident))
-        lines.add(
-            resident.name
-                + ": эффективность "
-                + game.survivalController.efficiencyPercent(resident)
-                + "% до бонуса комнаты");
-    if (room == 2)
-      for (Resident resident : game.people)
-        if (game.survivalController.treating(resident)) lines.add("Лечится: " + resident.name);
-    lines.add(game.roomBonus(room));
+    RoomUpgradeTask active = game.roomUpgradeController.active();
+    if (active != null && active.room == room) {
+      Resident builder = game.expeditionController.resident(active.builderId);
+      lines.add("УЛУЧШЕНИЕ ДО УРОВНЯ " + active.targetLevel);
+      lines.add("Строитель: " + (builder == null ? "ожидание доступного жителя" : builder.name));
+      lines.add("Прогресс: " + active.progress() + "% • осталось " + active.remaining() + " мин.");
+      lines.add("Оплачено: " + active.paidCost + " материалов");
+    } else if (game.roomLevels[room] < 3) {
+      int target = game.roomLevels[room] + 1;
+      ProductionController.UpgradeQuote quote =
+          game.productionController.upgradeQuote(RoomUpgradeConfig.cost(room, target));
+      lines.add("После улучшения: " + effectValue(room, target));
+      lines.add("Стоимость: " + quote.cost + " материалов • доступно: " + game.mats);
+      if (quote.saved > 0)
+        lines.add("База: " + quote.base + " • экономия мастерской: " + quote.saved);
+      lines.add("Время: " + RoomUpgradeConfig.minutes(room, target) + " игровых минут");
+      if (game.mats < quote.cost) lines.add("Не хватает материалов: " + (quote.cost - game.mats));
+      Resident builder = game.expeditionController.resident(view.roomUpgradePanel.builderId);
+      if (builder != null) {
+        lines.add("Строитель: " + builder.name);
+        String reason = game.roomUpgradeController.unavailableReason(builder);
+        if (!reason.isEmpty()) lines.add(reason);
+      }
+      if (active != null) lines.add("Идёт строительство: " + game.rooms[active.room]);
+    } else lines.add("Максимальный уровень");
+    production.append(lines, room);
+    if (room == 4) {
+      lines.add("Работают: " + game.occupants(room));
+      lines.add(game.roomBonus(room));
+    }
     if (room == 4) {
       lines.add("Прочность баррикад: " + game.raidController.durability + "%");
       lines.add("Сила защиты: " + Math.round(game.raidController.defensePower()));
@@ -92,42 +112,6 @@ final class RoomUpgradeRenderer {
                 + " мин.");
       }
     }
-    RoomUpgradeTask active = game.roomUpgradeController.active();
-    if (active != null && active.room == room) {
-      Resident builder = game.expeditionController.resident(active.builderId);
-      lines.add("УЛУЧШЕНИЕ ДО УРОВНЯ " + active.targetLevel);
-      lines.add("Строитель: " + (builder == null ? "ожидание доступного жителя" : builder.name));
-      lines.add("Прогресс: " + active.progress() + "%");
-      lines.add(
-          "Осталось: "
-              + active.remaining()
-              + " игровых минут ("
-              + game.formatBuild(active.remaining())
-              + ")");
-      lines.add("После завершения: " + effectValue(room, active.targetLevel));
-      lines.add("Материалы уже списаны. Строительство идёт по игровому времени.");
-    } else if (game.roomLevels[room] < 3) {
-      int target = game.roomLevels[room] + 1,
-          cost = RoomUpgradeConfig.cost(room, target),
-          minutes = RoomUpgradeConfig.minutes(room, target);
-      lines.add(
-          "После улучшения: "
-              + effectValue(room, target)
-              + (room == 5
-                  ? ""
-                  : " (+" + (RoomUpgradeConfig.percent(room, target) - 100) + "% к базе)"));
-      lines.add("Стоимость: " + cost + " материалов • доступно: " + game.mats);
-      lines.add("Время: " + minutes + " игровых минут (" + game.formatBuild(minutes) + ")");
-      if (game.mats < cost) lines.add("Не хватает материалов: " + (cost - game.mats));
-      if (active != null) lines.add("Идёт строительство: " + game.rooms[active.room]);
-      Resident builder = game.expeditionController.resident(view.roomUpgradePanel.builderId);
-      lines.add("Строитель: " + (builder == null ? "выберите жителя" : builder.name));
-      if (builder != null) {
-        String reason = game.roomUpgradeController.unavailableReason(builder);
-        if (!reason.isEmpty()) lines.add(reason);
-      }
-      lines.add("Стоимость списывается при подтверждении начала строительства.");
-    } else lines.add("Максимальный уровень");
     if (!view.roomUpgradePanel.message.isEmpty()) lines.add(view.roomUpgradePanel.message);
     body(c, layout, lines);
     String blocked = game.roomUpgradeController.blockedReason(room);
@@ -196,21 +180,29 @@ final class RoomUpgradeRenderer {
     view.p.setTypeface(Typeface.create("sans", Typeface.NORMAL));
     view.p.setTextSize(view.sy(12));
     for (String row : rows) {
-      String line = "";
-      for (String word : row.split(" ")) {
-        if (!line.isEmpty() && view.p.measureText(line + " " + word) > view.sy(350)) {
-          lines.add(line);
-          line = "";
-        }
-        line += (line.isEmpty() ? "" : " ") + word;
+      String rest = row;
+      while (view.p.measureText(rest) > view.sy(350)) {
+        int end = rest.length();
+        while (end > 1 && view.p.measureText(rest.substring(0, end)) > view.sy(350)) end--;
+        int space = rest.lastIndexOf(' ', end);
+        if (space > 0) end = space;
+        lines.add(rest.substring(0, end));
+        rest = rest.substring(end).trim();
       }
-      lines.add(line);
+      lines.add(rest);
     }
     view.roomUpgradePanel.lineCount = lines.size();
     int scroll =
-        Math.min(view.roomUpgradePanel.scroll, Math.max(0, lines.size() - layout.visibleLines));
+        Math.max(
+            0,
+            Math.min(
+                view.roomUpgradePanel.scroll, Math.max(0, lines.size() - layout.visibleLines)));
+    view.roomUpgradePanel.scroll = scroll;
     for (int i = 0; i < layout.visibleLines && scroll + i < lines.size(); i++)
-      view.txt(c, lines.get(scroll + i), 34, layout.top + 93 + i * 18, 12, view.text);
+      if (lines.get(scroll + i).equals("ПРОИЗВОДСТВО / ПОЛЕЗНЫЙ ЭФФЕКТ")
+          || lines.get(scroll + i).equals("УЛУЧШЕНИЕ ПОМЕЩЕНИЯ"))
+        view.bold(c, lines.get(scroll + i), 34, layout.top + 93 + i * 18, 11, view.accent);
+      else view.txt(c, lines.get(scroll + i), 34, layout.top + 93 + i * 18, 12, view.text);
     if (lines.size() > layout.visibleLines)
       view.txt(
           c,

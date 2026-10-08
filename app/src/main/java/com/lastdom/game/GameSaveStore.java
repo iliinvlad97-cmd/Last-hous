@@ -140,6 +140,7 @@ final class GameSaveStore {
       e.putInt(
           "survival6_output_" + channel,
           game.productionRemainders.values.getOrDefault("survival6_" + channel, 0));
+    ProductionSaveStore.save(game.production, e);
     RaidSaveStore.save(game, e);
     if (!e.commit()) throw new IllegalStateException("Не удалось сохранить игру");
   }
@@ -150,6 +151,7 @@ final class GameSaveStore {
     game.productionRemainders.values.clear();
     game.survivalController.reset();
     game.raidController.reset();
+    game.production.reset();
     for (MapLocation location : game.cityLocations) {
       location.setDepletion(sp.getInt("map_" + location.id + "_depletion", 0));
       try {
@@ -218,7 +220,8 @@ final class GameSaveStore {
       s.morale = SurvivalConfig.clamp(sp.getInt(k + "morale", 75));
       s.alive = sp.getBoolean(k + "alive", true);
       s.thirst = SurvivalConfig.clamp(sp.getInt(k + "thirst", 10));
-      s.foodMinutes = Math.max(0, Math.min(1440, sp.getInt(k + "foodMinutes", 0)));
+      s.foodMinutes =
+          Math.max(0, Math.min(ProductionConfig.MAX_FOOD_MINUTES, sp.getInt(k + "foodMinutes", 0)));
       s.waterMinutes = Math.max(0, Math.min(1440, sp.getInt(k + "waterMinutes", 0)));
       s.warningMask = sp.getInt(k + "survivalWarnings", 0);
       s.warningMinute = safeLong(k + "warningMinute", -SurvivalConfig.WARNING_COOLDOWN);
@@ -273,6 +276,7 @@ final class GameSaveStore {
             "fatigue",
             -game.productionRemainders.values.getOrDefault("rest_" + resident.id, 0) * 1440);
       }
+    ProductionSaveStore.load(game.production, sp);
     RaidSaveStore.load(game, sp);
   }
 
@@ -303,7 +307,12 @@ final class GameSaveStore {
           .putInt(key + "cost", task.paidCost)
           .putBoolean(key + "paid", task.costPaid)
           .putBoolean(key + "completed", task.completed)
-          .putBoolean(key + "legacy", task.legacy);
+          .putBoolean(key + "legacy", task.legacy)
+          .putInt(
+              key + "production8_saved",
+              task.legacy
+                  ? 0
+                  : RoomUpgradeConfig.cost(task.room, task.targetLevel) - task.paidCost);
     }
     for (String channel : ProductionRemainders.GLOBAL)
       editor.putInt(
@@ -372,8 +381,16 @@ final class GameSaveStore {
               || cost < 0
               || start < 0
               || !paid) throw new IllegalArgumentException();
+          int baseCost = RoomUpgradeConfig.cost(room, target);
+          int saved =
+              sp.contains("production8_schema") ? sp.getInt(key + "production8_saved", 0) : 0;
+          int maxSaving =
+              (baseCost * ProductionConfig.WORKSHOP_MAX_SAVING + ProductionConfig.BASIS - 1)
+                  / ProductionConfig.BASIS;
           if (!legacy
-              && (cost != RoomUpgradeConfig.cost(room, target)
+              && (saved < 0
+                  || saved > maxSaving
+                  || cost != baseCost - saved
                   || duration != RoomUpgradeConfig.minutes(room, target)))
             throw new IllegalArgumentException();
           Resident resident = game.expeditionController.resident(builder);

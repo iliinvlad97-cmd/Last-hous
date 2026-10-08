@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v1.0.0 • SHELTER DEFENSE • STAGE 7";
+  static final String VERSION_LABEL = "v1.0.1 • PRODUCTION & ECONOMY • STAGE 8";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();

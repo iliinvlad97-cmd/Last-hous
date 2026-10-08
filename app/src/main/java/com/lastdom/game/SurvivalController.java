@@ -76,6 +76,7 @@ final class SurvivalController {
   }
 
   private boolean medicalStaffAvailable() {
+    if (!game.productionController.medicineAvailable()) return false;
     for (Resident staff : game.people)
       if (working(staff)
           && staff.job.equals("Лечение")
@@ -116,17 +117,7 @@ final class SurvivalController {
   }
 
   int workPercent(Resident r) {
-    if (!working(r)) return 0;
-    int room =
-        r.job.equals("Еда")
-            ? 1
-            : r.job.equals("Материалы")
-                ? 3
-                : r.job.equals("Лечение") ? 2 : r.job.equals("Охрана") ? 4 : -1;
-    return (int)
-        Math.round(
-            SurvivalConfig.efficiency(r)
-                * (room < 0 ? 100 : game.roomUpgradeController.percent(room)));
+    return game.productionController.workerPercent(r);
   }
 
   void advanceMinute() {
@@ -139,17 +130,16 @@ final class SurvivalController {
         medics += (r.skill + 1) * SurvivalConfig.efficiency(r);
         baseMedics += r.skill + 1;
       }
+    boolean clinic = game.productionController.beginClinicMinute(baseMedics > 0 && medics > 0);
     for (Resident r : game.people) {
       if (!r.alive) continue;
       clamp(r);
       boolean away = game.isOnExpedition(r);
       if (!away) {
-        // Reserve one real unit for a resident's next 1440 HOME minutes. The saved balance
+        // Reserve one real food unit for HOME minutes (kitchen can extend the food ration).
+        // Water retains 1440 minutes. The saved balance
         // prevents recharging on reload; away residents neither consume nor use this ration.
-        if (r.foodMinutes == 0 && game.food > 0) {
-          game.food--;
-          r.foodMinutes = 1440;
-        }
+        game.productionController.reserveFood(r);
         if (r.waterMinutes == 0 && game.water > 0) {
           game.water--;
           r.waterMinutes = 1440;
@@ -189,17 +179,18 @@ final class SurvivalController {
         healthRate -= SurvivalConfig.CRITICAL_DAMAGE_PER_DAY * 100;
       if (r.thirst >= SurvivalConfig.CRITICAL)
         healthRate -= SurvivalConfig.CRITICAL_DAMAGE_PER_DAY * 100;
-      // Preserve the existing free, staff-dependent treatment rule; no medicine cost existed.
+      // Existing health/recovery formula; the clinic dose is prepaid once for all patients.
       if (!away
           && !game.isBuilding(r)
           && !game.isDefending(r)
           && r.hunger < SurvivalConfig.CRITICAL
           && r.thirst < SurvivalConfig.CRITICAL) {
-        healthRate +=
-            (int)
-                Math.round(
-                    (baseMedics == 0 ? 0 : (baseMedics / 2) * medics / baseMedics)
-                        * game.roomUpgradeController.percent(2));
+        if (clinic)
+          healthRate +=
+              (int)
+                  Math.round(
+                      (baseMedics == 0 ? 0 : (baseMedics / 2) * medics / baseMedics)
+                          * game.roomUpgradeController.percent(2));
         if (rest) healthRate += SurvivalConfig.REST_HEALTH_PER_DAY * 100;
       }
       change(r, "health", healthRate);
@@ -300,64 +291,7 @@ final class SurvivalController {
     r.morale = SurvivalConfig.clamp(r.morale);
   }
 
-  private int output(int base, int room, int effectiveness, int minutes, String key) {
-    String channel = "survival6_" + key;
-    long amount =
-        game.productionRemainders.values.getOrDefault(channel, 0)
-            + (long) base
-                * (room < 0 ? 100 : game.roomUpgradeController.percent(room))
-                * effectiveness
-                * minutes;
-    game.productionRemainders.values.put(channel, (int) (amount % OUTPUT_DENOMINATOR));
-    return (int) Math.min(Integer.MAX_VALUE, amount / OUTPUT_DENOMINATOR);
-  }
-
-  private int add(int value, int amount) {
-    return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, value) + amount);
-  }
-
   void produce(int minutes) {
-    game.power =
-        add(game.power, output(RoomUpgradeConfig.BASE_ENERGY_PER_DAY, 0, 100, minutes, "energy"));
-    for (Resident r : game.people) {
-      if (!working(r)) continue;
-      int efficiency = efficiencyPercent(r);
-      switch (r.job) {
-        case "Еда":
-          game.food =
-              add(
-                  game.food,
-                  output(
-                      3 + (r.role.equals("Сборщик") ? r.skill : 1),
-                      1,
-                      efficiency,
-                      minutes,
-                      "food"));
-          break;
-        case "Вода": // Kitchen upgrades historically affect food only.
-          game.water = add(game.water, output(4, -1, efficiency, minutes, "water"));
-          break;
-        case "Материалы":
-          game.mats =
-              add(
-                  game.mats,
-                  output(
-                      2 + (r.role.equals("Механик") ? 2 : 0), 3, efficiency, minutes, "materials"));
-          break;
-        case "Ремонт":
-          game.shelter =
-              Math.min(100, game.shelter + output(3 + r.skill, -1, efficiency, minutes, "repair"));
-          game.roomCondition[0] =
-              Math.min(
-                  100, game.roomCondition[0] + output(2, -1, efficiency, minutes, "condition"));
-          break;
-        case "Охрана":
-          game.threat =
-              Math.max(0, game.threat - output(r.skill + 1, 4, efficiency, minutes, "guards"));
-          break;
-        default:
-          break;
-      }
-    }
+    game.productionController.produce(minutes);
   }
 }

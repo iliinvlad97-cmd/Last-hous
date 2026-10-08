@@ -11,6 +11,7 @@ class GameController extends GameState {
   final ExpeditionController expeditionController = new ExpeditionController(this);
   final RoomUpgradeController roomUpgradeController = new RoomUpgradeController(this);
   final SurvivalController survivalController = new SurvivalController(this);
+  final ProductionController productionController = new ProductionController(this);
   final RaidController raidController = new RaidController(this);
   private final GameSaveStore saves;
   private final Runnable redraw;
@@ -62,6 +63,7 @@ class GameController extends GameState {
     expeditions.clear();
     roomUpgrades.clear();
     productionRemainders.values.clear();
+    production.reset();
     survivalController.reset();
     raidController.reset();
     for (MapLocation location : cityLocations) {
@@ -189,13 +191,13 @@ class GameController extends GameState {
             + RoomUpgradeConfig.BASE_ENERGY_PER_DAY
             + " энергии за игровой день. Улучшение усиливает выработку.";
       case 1:
-        return "Повышает эффективность производства еды и позволяет лучше использовать запасы"
-            + " убежища.";
+        return "Снижает расход пищевых запасов при приготовлении и позволяет лучше использовать"
+            + " запасы убежища.";
       case 2:
         return "Ускоряет лечение раненых и восстановление здоровья жителей, назначенных на"
             + " лечение.";
       case 3:
-        return "Повышает добычу и обработку материалов, а также эффективность механиков.";
+        return "Экономит материалы при улучшении комнат. Сырьё поступает из экспедиций.";
       case 4:
         return "Усиливает защиту убежища и помогает охране снижать уровень угрозы.";
       case 5:

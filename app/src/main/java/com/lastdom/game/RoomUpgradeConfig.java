@@ -30,11 +30,11 @@ final class RoomUpgradeConfig {
       case 0:
         return "Выработка энергии";
       case 1:
-        return "Производство еды";
+        return "Эффективность приготовления";
       case 2:
         return "Скорость лечения";
       case 3:
-        return "Производство материалов";
+        return "Эффективность обработки";
       case 4:
         return "Защита от угроз";
       default:

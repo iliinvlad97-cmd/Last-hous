@@ -36,7 +36,12 @@ final class RoomUpgradeController {
     if (game.roomUpgrades.stream().filter(task -> !task.completed).count()
         >= RoomUpgradeConfig.MAX_ACTIVE) return "Сначала завершите текущее строительство";
     if (game.raidController.repairing()) return "Сначала завершите ремонт баррикад";
-    long missing = (long) RoomUpgradeConfig.cost(room, game.roomLevels[room] + 1) - game.mats;
+    long missing =
+        (long)
+                game.productionController.upgradeQuote(
+                        RoomUpgradeConfig.cost(room, game.roomLevels[room] + 1))
+                    .cost
+            - game.mats;
     return missing > 0 ? "Не хватает материалов: " + missing : "";
   }
 
@@ -46,7 +51,10 @@ final class RoomUpgradeController {
     Resident builder = game.expeditionController.resident(builderId);
     reason = unavailableReason(builder);
     if (!reason.isEmpty()) return reason;
-    int target = game.roomLevels[room] + 1, cost = RoomUpgradeConfig.cost(room, target);
+    int target = game.roomLevels[room] + 1;
+    ProductionController.UpgradeQuote quote =
+        game.productionController.upgradeQuote(RoomUpgradeConfig.cost(room, target));
+    int cost = quote.cost;
     RoomUpgradeTask task =
         new RoomUpgradeTask(
             java.util.UUID.randomUUID().toString(),
@@ -60,6 +68,7 @@ final class RoomUpgradeController {
             false,
             0,
             false);
+    game.productionController.applyUpgradeQuote(quote);
     game.mats -= cost;
     game.roomUpgrades.add(task);
     builder.status = Resident.Status.BUILDING;
@@ -75,6 +84,8 @@ final class RoomUpgradeController {
             + ". Материалы -"
             + cost
             + ".");
+    if (quote.saved > 0)
+      game.addLog("Мастерская сэкономила " + quote.saved + " материалов при улучшении.");
     game.save();
     game.invalidate();
     return "";

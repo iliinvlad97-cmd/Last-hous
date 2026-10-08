@@ -16,6 +16,7 @@ class GameState {
   final ArrayList<Expedition> expeditions = new ArrayList<>();
   final ExpeditionLoot expeditionWarehouse = new ExpeditionLoot();
   final ArrayList<RoomUpgradeTask> roomUpgrades = new ArrayList<>();
+  final ProductionState production = new ProductionState();
   final ProductionRemainders productionRemainders = new ProductionRemainders();
   String[] jobs = {"Отдых", "Еда", "Вода", "Материалы", "Ремонт", "Охрана", "Лечение"};
   String[] rooms = {"Генераторная", "Кухня", "Медпункт", "Мастерская", "Баррикады", "Спальня"};
