@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v0.9.8 • SHELTER UPGRADES • STAGE 5";
+  static final String VERSION_LABEL = "v0.9.9 • SURVIVOR NEEDS • STAGE 6";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -27,7 +27,8 @@ public final class GameView extends View {
       new Runnable() {
         public void run() {
           if (!game.paused && !game.gameOver && !game.event) {
-            for (int i = 0; i < game.speed; i++) game.advanceMinute();
+            for (int i = 0; i < game.speed && !game.event && !game.gameOver; i++)
+              game.advanceMinute();
             if (game.screen == CITY_MAP
                 || (game.expeditionController.report() != null
                     && (game.expeditionController.report().state() == Expedition.State.COMPLETED
@@ -44,6 +45,8 @@ public final class GameView extends View {
   final ResidentRenderer residentRenderer = new ResidentRenderer(this);
   final HudRenderer hudRenderer = new HudRenderer(this);
   final OverlayRenderer overlayRenderer = new OverlayRenderer(this);
+  final ResidentNeedsRenderer residentNeedsRenderer = new ResidentNeedsRenderer(this);
+  final ResidentNeedsPanelController residentNeedsPanel = new ResidentNeedsPanelController(this);
   final CityMapController cityMap;
   final RoomUpgradePanelController roomUpgradePanel;
   final RoomUpgradeRenderer roomUpgradeRenderer = new RoomUpgradeRenderer(this);
@@ -113,6 +116,8 @@ public final class GameView extends View {
     else if (game.screen == 3) overlayRenderer.drawRooms(c);
     else if (game.screen == 4) overlayRenderer.drawRoomDetail(c);
     else overlayRenderer.drawMap(c);
+    if (game.overlay == 0 && !game.event && !cityMap.eventPanel && !cityMap.expeditionPanel)
+      residentNeedsRenderer.notice(c);
     if (game.screen != CITY_MAP && cityMap.expeditionPanel)
       expeditionRenderer.drawPanel(c, new CityMapLayout(H / scale));
     if (cityMap.eventPanel) expeditionEventRenderer.draw(c, new CityMapLayout(H / scale));
@@ -189,6 +194,18 @@ public final class GameView extends View {
 
   @Override
   public boolean onTouchEvent(MotionEvent e) {
+    if ((game.screen == HOME && (game.overlay == 1 || game.overlay == 3) || game.screen == 1)
+        && !game.event
+        && !game.gameOver
+        && !game.jobMenu
+        && !cityMap.eventPanel
+        && !cityMap.expeditionPanel) {
+      if (residentNeedsPanel.scrollTouch(
+          e.getAction(), e.getY() / scale, new ResidentNeedsLayout(H / scale))) {
+        invalidate();
+        return true;
+      }
+    }
     if ((game.screen == HOME && game.overlay == 2 || game.screen == 4)
         && !game.event
         && !game.gameOver
@@ -250,45 +267,9 @@ public final class GameView extends View {
       invalidate();
       return true;
     }
-    if (game.screen == 0 && game.overlay != 0) {
-      float top =
-          (game.overlay == 3
-              ? Math.max(250, hh - 470)
-              : game.overlay == 1 ? Math.max(285, hh - 405) : Math.max(300, hh - 390));
-      if (y < top || x > 350 && y < top + 55) {
-        game.overlay = 0;
-        invalidate();
-        return true;
-      }
-      if (game.overlay == 1) {
-        if (y >= top + 211 && y <= top + 257) {
-          if (game.isOnExpedition(game.people.get(game.selected))
-              || game.isBuilding(game.people.get(game.selected))) return true;
-          game.jobMenu = true;
-          invalidate();
-          return true;
-        }
-        if (y >= top + 266 && y <= top + 309 && x < 210) {
-          game.assignJob(game.selected, "Отдых");
-          game.save();
-          invalidate();
-          return true;
-        }
-        if (y >= top + 266 && y <= top + 309 && x >= 210) {
-          game.overlay = 0;
-          invalidate();
-          return true;
-        }
-      } else if (game.overlay == 3) {
-        float yy = top + 65;
-        for (int i = 0; i < Math.min(6, game.people.size()); i++, yy += 59)
-          if (y >= yy && y <= yy + 52) {
-            game.selected = i;
-            game.overlay = 1;
-            invalidate();
-            return true;
-          }
-      }
+    if (game.screen == HOME && (game.overlay == 1 || game.overlay == 3) || game.screen == 1) {
+      residentNeedsPanel.touch(x, y, new ResidentNeedsLayout(hh));
+      invalidate();
       return true;
     }
     if (game.screen == 0) {

@@ -119,7 +119,7 @@ public class RegressionProbe {
   // Guard body overlaps the existing exit rectangle; resident touch wins, exit is still clickable.
   v=fresh(420,840);v.game.people.add(resident("Охрана"));v.game.people.add(resident("Охрана"));draw(v);
   tap(v,v.game.residentX[1],v.game.residentY[1]-30);require(v.game.selected==1&&v.game.overlay==1&&v.game.screen==0,"surface body before exit");
-  int room=v.game.selectedRoom;tap(v,40,400);require(v.game.overlay==0&&v.game.selectedRoom==room,"overlay dismiss does not click room");
+  int room=v.game.selectedRoom;tap(v,8,400);require(v.game.overlay==0&&v.game.selectedRoom==room,"overlay dismiss does not click room");
   tap(v,210,190);require(v.game.screen==5,"unchanged city exit remains clickable");
   v=fresh(420,840);v.game.people.add(resident("Лечение"));draw(v);
   v.game.people.get(0).health=30;v.game.people.get(0).fatigue=90;bootContact(v,0);
@@ -171,6 +171,25 @@ def main():
             'TreeMap<String,Object> legacy=new TreeMap<>(Context.preferences.values);'
             'legacy.keySet().removeIf(k->k.equals("power")||k.startsWith("upgrade5_")||k.startsWith("exp2_")||k.startsWith("exp3_")||k.startsWith("exp_store_")||k.startsWith("map_")||k.matches("p[0-9]+_id"));'
             'state.put("saved",legacy.toString());')
+        # Stage 6 intentionally replaces the daily economy/starvation and needs clocks.
+        # survival_regression.py checks their precise rates, persistence and all six rooms.
+        gameplay_probe = "\n".join(line for line in gameplay_probe.split("\n")
+            if not line.strip().startswith('for(String job:new String[]{"Отдых"')
+            and not line.strip().startswith('fresh();set(game,"food",0);set(game,"water",0);'))
+        gameplay_probe = gameplay_probe.replace('tap(50,400);require', 'tap(8,400);require')
+        gameplay_probe = gameplay_probe.replace('water mats', 'mats')
+        gameplay_probe = gameplay_probe.replace('food ', '')
+        gameplay_probe = gameplay_probe.replace('!f.getName().equals("status")',
+            '!java.util.Set.of("status","health","hunger","thirst","fatigue","morale",'
+            '"foodMinutes","waterMinutes","warningMask","warningMinute","autoRecovery",'
+            '"resumeJob","survivalFractions","warningAt").contains(f.getName())')
+        gameplay_probe = gameplay_probe.replace('k.equals("power")||',
+            'k.equals("power")||k.equals("food")||k.equals("water")||k.startsWith("survival6_")||'
+            'k.matches("p[0-9]+_(health|hunger|thirst|fatigue|morale|foodMinutes|waterMinutes|survivalWarnings|warningMinute|autoRecovery|resumeJob|survivalFraction_.*|warningAt_.*)")||')
+        # The revised loader replaces the in-memory journal. Clear the old test's temporary
+        # pre-load journal in both versions; the new no-duplication contract has dedicated tests.
+        gameplay_probe = gameplay_probe.replace('call(game,"load");require((Integer)get(game,"day")==7',
+            '((java.util.List)get(game,"log")).clear();call(game,"load");require((Integer)get(game,"day")==7')
         fixtures.PROBE = gameplay_probe
         baseline = subprocess.check_output(["git", "show", f"{fixtures.BASELINE}:{fixtures.JAVA_PATH}/MainActivity.java"], cwd=root, text=True)
         original = {"com/lastdom/game/MainActivity.java": baseline, "com/lastdom/game/R.java": current["com/lastdom/game/R.java"]}

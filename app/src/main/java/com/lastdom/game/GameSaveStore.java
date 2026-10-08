@@ -39,7 +39,18 @@ final class GameSaveStore {
           .putInt(k + "hunger", s.hunger)
           .putInt(k + "fatigue", s.fatigue)
           .putInt(k + "morale", s.morale)
-          .putBoolean(k + "alive", s.alive);
+          .putBoolean(k + "alive", s.alive)
+          .putInt(k + "thirst", s.thirst)
+          .putInt(k + "foodMinutes", s.foodMinutes)
+          .putInt(k + "waterMinutes", s.waterMinutes)
+          .putInt(k + "survivalWarnings", s.warningMask)
+          .putString(k + "warningMinute", Long.toString(s.warningMinute))
+          .putBoolean(k + "autoRecovery", s.autoRecovery)
+          .putString(k + "resumeJob", s.resumeJob);
+      for (int warning = 0; warning < s.warningAt.length; warning++)
+        e.putString(k + "warningAt_" + warning, Long.toString(s.warningAt[warning]));
+      for (String fraction : SurvivalController.FRACTIONS)
+        e.putInt(k + "survivalFraction_" + fraction, s.survivalFractions.getOrDefault(fraction, 0));
     }
     for (int i = 0; i < 6; i++) {
       e.putInt("room" + i, game.roomLevels[i]);
@@ -120,16 +131,23 @@ final class GameSaveStore {
     for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
       e.putInt("exp_store_" + resource.name(), game.expeditionWarehouse.get(resource));
     saveUpgrades(game, e);
-    boolean fractional =
-        game.productionRemainders.values.values().stream().anyMatch(value -> value != 0);
-    if (game.expeditions.isEmpty() && game.roomUpgrades.isEmpty() && !fractional) e.apply();
-    else if (!e.commit()) throw new IllegalStateException("Не удалось сохранить игру");
+    e.putInt("survival6_schema", 1)
+        .putInt("survival6_resourceWarnings", game.survivalController.resourceWarnings)
+        .putString(
+            "survival6_resourceWarningMinute",
+            Long.toString(game.survivalController.resourceWarningMinute));
+    for (String channel : SurvivalController.OUTPUTS)
+      e.putInt(
+          "survival6_output_" + channel,
+          game.productionRemainders.values.getOrDefault("survival6_" + channel, 0));
+    if (!e.commit()) throw new IllegalStateException("Не удалось сохранить игру");
   }
 
   void load(GameController game) {
     game.expeditions.clear();
     game.roomUpgrades.clear();
     game.productionRemainders.values.clear();
+    game.survivalController.reset();
     for (MapLocation location : game.cityLocations) {
       location.setDepletion(sp.getInt("map_" + location.id + "_depletion", 0));
       try {
@@ -192,13 +210,32 @@ final class GameSaveStore {
       if (s.id == null || s.id.isEmpty() || residentIds.contains(s.id)) s.id = "legacy-" + i;
       while (residentIds.contains(s.id)) s.id += "-recovered";
       residentIds.add(s.id);
-      s.health = sp.getInt(k + "health", 100);
-      s.hunger = sp.getInt(k + "hunger", 10);
-      s.fatigue = sp.getInt(k + "fatigue", 10);
-      s.morale = sp.getInt(k + "morale", 75);
+      s.health = SurvivalConfig.clamp(sp.getInt(k + "health", 100));
+      s.hunger = SurvivalConfig.clamp(sp.getInt(k + "hunger", 10));
+      s.fatigue = SurvivalConfig.clamp(sp.getInt(k + "fatigue", 10));
+      s.morale = SurvivalConfig.clamp(sp.getInt(k + "morale", 75));
       s.alive = sp.getBoolean(k + "alive", true);
+      s.thirst = SurvivalConfig.clamp(sp.getInt(k + "thirst", 10));
+      s.foodMinutes = Math.max(0, Math.min(1440, sp.getInt(k + "foodMinutes", 0)));
+      s.waterMinutes = Math.max(0, Math.min(1440, sp.getInt(k + "waterMinutes", 0)));
+      s.warningMask = sp.getInt(k + "survivalWarnings", 0);
+      s.warningMinute = safeLong(k + "warningMinute", -SurvivalConfig.WARNING_COOLDOWN);
+      for (int warning = 0; warning < s.warningAt.length; warning++)
+        s.warningAt[warning] =
+            safeLong(k + "warningAt_" + warning, -SurvivalConfig.WARNING_COOLDOWN);
+      s.autoRecovery = sp.getBoolean(k + "autoRecovery", false);
+      s.resumeJob = sp.getString(k + "resumeJob", "");
+      for (String fraction : SurvivalController.FRACTIONS)
+        s.survivalFractions.put(
+            fraction,
+            Math.max(
+                -SurvivalController.NEED_DENOMINATOR + 1,
+                Math.min(
+                    SurvivalController.NEED_DENOMINATOR - 1,
+                    sp.getInt(k + "survivalFraction_" + fraction, 0))));
       game.people.add(s);
     }
+    game.log.clear();
     String l = sp.getString("log", "");
     if (!l.isEmpty()) game.log.addAll(Arrays.asList(l.split("\\n§\\n")));
     if (sp.contains("exp2_schema")) loadExpeditions(game);
@@ -212,6 +249,36 @@ final class GameSaveStore {
             game.expeditionController.now());
     game.expeditionController.restoreMembership();
     loadUpgrades(game);
+    game.survivalController.resourceWarnings = sp.getInt("survival6_resourceWarnings", 0);
+    game.survivalController.resourceWarningMinute =
+        safeLong("survival6_resourceWarningMinute", -SurvivalConfig.WARNING_COOLDOWN);
+    for (String channel : SurvivalController.OUTPUTS) {
+      int oldFraction = game.productionRemainders.values.getOrDefault(channel, 0) * 144000;
+      game.productionRemainders.values.put(
+          "survival6_" + channel,
+          Math.max(
+              0,
+              Math.min(
+                  SurvivalController.OUTPUT_DENOMINATOR - 1,
+                  sp.getInt("survival6_output_" + channel, oldFraction))));
+    }
+    if (!sp.contains("survival6_schema"))
+      for (Resident resident : game.people) {
+        resident.survivalFractions.put(
+            "health",
+            game.productionRemainders.values.getOrDefault("heal_" + resident.id, 0) * 1440);
+        resident.survivalFractions.put(
+            "fatigue",
+            -game.productionRemainders.values.getOrDefault("rest_" + resident.id, 0) * 1440);
+      }
+  }
+
+  private long safeLong(String key, long fallback) {
+    try {
+      return Long.parseLong(sp.getString(key, Long.toString(fallback)));
+    } catch (NumberFormatException exception) {
+      return fallback;
+    }
   }
 
   private void saveUpgrades(GameController game, SharedPreferences.Editor editor) {

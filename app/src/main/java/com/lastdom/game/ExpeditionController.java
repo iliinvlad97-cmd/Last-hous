@@ -35,11 +35,11 @@ final class ExpeditionController {
   }
 
   String unavailableReason(Resident resident) {
-    if (resident != null && game.isBuilding(resident)) return "Занят строительством";
+    if (resident == null) return "Житель больше не существует";
+    if (game.isBuilding(resident)) return "Занят строительством";
     if (!resident.alive) return "Погиб";
     if (contains(resident) || resident.job.equals("Экспедиция")) return "В экспедиции";
-    if (resident.health <= 0) return "Нет здоровья";
-    return "";
+    return game.survivalController.expeditionReason(resident);
   }
 
   String start(String locationId, Collection<String> ids) {
@@ -158,11 +158,7 @@ final class ExpeditionController {
     double total = 0;
     for (String id : expedition.participantIds) {
       Resident resident = resident(id);
-      if (resident != null)
-        total +=
-            Math.max(0, Math.min(100, resident.health))
-                / 100.0
-                * (1 - Math.max(0, Math.min(100, resident.fatigue)) * .005);
+      if (resident != null) total += SurvivalConfig.efficiency(resident);
     }
     return total / expedition.participantIds.size();
   }
@@ -232,11 +228,7 @@ final class ExpeditionController {
     expedition.cargo = expedition.found.cargo(expedition.capacity());
     expedition.resultGenerated = true;
     MapLocation target = location(expedition.locationId);
-    expedition.fatigueGain =
-        10
-            + (expedition.durationMinutes * 2
-                    + (early ? expedition.elapsedMinutes() : expedition.phaseDurationMinutes))
-                / 30;
+    expedition.fatigueGain = 0; // Fatigue is already accumulated by the survival minute clock.
     target.setDepletion(target.depletion() + 10);
     target.setState(MapLocation.State.SEARCHED);
     expedition.restorePhase(Expedition.State.AWAITING_RETURN, 1, 1, now());
@@ -265,7 +257,11 @@ final class ExpeditionController {
     }
     for (java.util.Map.Entry<String, Integer> change : out.healthLoss.entrySet()) {
       Resident resident = resident(change.getKey());
-      if (resident != null) resident.health = Math.max(1, resident.health - change.getValue());
+      if (resident != null) {
+        int before = resident.health;
+        resident.health = SurvivalConfig.clamp(resident.health - change.getValue());
+        game.survivalController.injury(resident, before - resident.health);
+      }
     }
     for (java.util.Map.Entry<String, Integer> change : out.fatigueAdded.entrySet()) {
       Resident resident = resident(change.getKey());
@@ -374,7 +370,8 @@ final class ExpeditionController {
       if (resident == null) continue;
       resident.job = "Отдых";
       resident.status = Resident.Status.HOME;
-      resident.fatigue = Math.min(100, resident.fatigue + expedition.fatigueGain);
+      resident.autoRecovery = false;
+      resident.resumeJob = "";
     }
     expedition.rewardCredited = true;
     expedition.completedMinute = now();

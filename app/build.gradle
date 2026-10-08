@@ -1,7 +1,7 @@
 plugins { id 'com.android.application' }
 
 // CI supplies a monotonically increasing code; local builds use the next source version.
-def requestedVersionCode = providers.gradleProperty('lastHouseVersionCode').getOrElse('101')
+def requestedVersionCode = providers.gradleProperty('lastHouseVersionCode').getOrElse('102')
 if (!(requestedVersionCode ==~ /[0-9]+/)) {
     throw new GradleException('lastHouseVersionCode must be an integer.')
 }
@@ -29,7 +29,7 @@ if (usePersistentSigning) {
 }
 
 android { namespace 'com.lastdom.game'; compileSdk 36
-    defaultConfig { applicationId 'com.lastdom.game'; minSdk 24; targetSdk 36; versionCode apkVersionCode.intValue(); versionName '0.9.8' }
+    defaultConfig { applicationId 'com.lastdom.game'; minSdk 24; targetSdk 36; versionCode apkVersionCode.intValue(); versionName '0.9.9' }
 
     if (usePersistentSigning) {
         signingConfigs {

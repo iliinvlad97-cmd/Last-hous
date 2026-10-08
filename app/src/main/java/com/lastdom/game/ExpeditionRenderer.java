@@ -122,7 +122,7 @@ final class ExpeditionRenderer {
             lines.add(resource.label + ": +" + expedition.cargo.get(resource));
         long duration = Math.max(0, expedition.completedMinute - expedition.departureMinute);
         lines.add("Продолжительность: " + duration / 60 + " ч " + duration % 60 + " мин.");
-        lines.add("Усталость участников: +" + expedition.fatigueGain);
+        lines.add("Усталость и потребности учтены за время пути");
         lines.add("Ресурсы уже начислены. Кнопка подтверждает просмотр.");
       } else lines.add("Припасы будут начислены после возвращения в убежище.");
     } else {

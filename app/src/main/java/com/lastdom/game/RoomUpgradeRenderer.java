@@ -46,7 +46,17 @@ final class RoomUpgradeRenderer {
             + ": "
             + game.roomUpgradeController.percent(room)
             + "% от базовой");
-    lines.add("Работают: " + game.occupants(room));
+    lines.add((room == 5 ? "Отдыхают: " : "Работают: ") + game.occupants(room));
+    for (Resident resident : game.people)
+      if (game.homeRoomFor(resident) == room && game.survivalController.working(resident))
+        lines.add(
+            resident.name
+                + ": эффективность "
+                + game.survivalController.efficiencyPercent(resident)
+                + "% до бонуса комнаты");
+    if (room == 2)
+      for (Resident resident : game.people)
+        if (game.survivalController.treating(resident)) lines.add("Лечится: " + resident.name);
     lines.add(game.roomBonus(room));
     RoomUpgradeTask active = game.roomUpgradeController.active();
     if (active != null && active.room == room) {

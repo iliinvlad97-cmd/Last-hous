@@ -63,6 +63,8 @@ public class RegressionProbe {
    require(v.cityMap.preparation()==null&&g.screen==GameView.CITY_MAP,"launch closes preparation");
    require(e.departureMinute==480&&e.durationMinutes==45,"departure and near duration");
    int food=g.food,water=g.water,mats=g.mats,power=g.power;
+   // Isolate reward assertions from Stage 6 ration purchases (covered by survival regression).
+   for(Resident resident:g.people)if(!g.isOnExpedition(resident)){resident.foodMinutes=1440;resident.waterMinutes=1440;}
    for(int i=0;i<3;i++){
     Resident resident=g.people.get(i);require(resident.status==Resident.Status.ON_EXPEDITION,"resident status");
     require(g.homeRoomFor(resident)==-1&&!g.assignJob(i,"Отдых"),"away has no room and cannot be reassigned");
@@ -77,8 +79,8 @@ public class RegressionProbe {
    g.mats=mats;power=g.power; // processJobs now also runs the Stage 5 generator.
    g.people.get(3).job="Отдых";g.people.get(4).job="Отдых";
    nav(v,3);text(draw(v),"В экспедиции");g.selected=0;g.overlay=1;draw(v);
-   float top=Math.max(285,logicalHeight-405);tap(v,180,top+230);require(!g.jobMenu,"away assignment menu blocked");
-   tap(v,100,top+280);require(g.people.get(0).job.equals("Экспедиция"),"rest button cannot recall squad");g.overlay=0;
+   ResidentNeedsLayout needsLayout=new ResidentNeedsLayout(logicalHeight);tap(v,180,needsLayout.footer+22);require(!g.jobMenu,"away assignment menu blocked");
+   tap(v,100,needsLayout.footer+72);require(g.people.get(0).job.equals("Экспедиция"),"rest button cannot recall squad");g.overlay=0;
    nav(v,2);CityMapLayout m=new CityMapLayout(logicalHeight);draw(v);
    tap(v,180,m.bottom-39);require(v.cityMap.expeditionPanel,"indicator opens expedition panel");text(draw(v),"ЭКСПЕДИЦИЯ");
    tap(v,210,m.panelBottom-40);require(!v.cityMap.expeditionPanel,"panel close");

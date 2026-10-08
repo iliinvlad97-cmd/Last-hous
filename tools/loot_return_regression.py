@@ -42,6 +42,8 @@ public class RegressionProbe {
   int[] selected=number==1?new int[]{3}:number==2?new int[]{3,4}:new int[]{3,4,1};
   int food=v.game.food,water=v.game.water,mats=v.game.mats,medicine=v.game.expeditionWarehouse.get(ExpeditionLoot.Resource.MEDICINE),equipment=0;
   start(v,location,selected);Expedition first=e(v);String id=first.id;
+  // Reserve home residents' Stage 6 rations before measuring expedition-only rewards.
+  for(int i=0;i<v.game.people.size();i++)if(!v.game.isOnExpedition(v.game.people.get(i))){v.game.people.get(i).foodMinutes=1440;v.game.people.get(i).waterMinutes=1440;}
   require(Context.preferences.commits>0,"launch is durable before UI");
   v.game.advanceMinute();int elapsed=e(v).elapsedMinutes();v=kill();require(e(v).id.equals(id)&&e(v).elapsedMinutes()==elapsed,"kill restores outbound");
   until(v,Expedition.State.EXPLORING);require(e(v).routeProgress()==1&&e(v).elapsedMinutes()==0,"arrival starts timed exploration on target");
@@ -76,12 +78,12 @@ public class RegressionProbe {
   v.game.paused=true;v.tick.run();require(e(v).elapsedMinutes()==elapsed,"return pause");v.game.paused=false;
   for(int speed:new int[]{1,2,4}){v.game.speed=speed;int before=e(v).elapsedMinutes();v.tick.run();require(e(v).elapsedMinutes()==before+speed,"return speed "+speed);}
   require(v.game.food==food&&v.game.water==water&&v.game.mats==mats,"no credit while returning");
-  nav(v,0);while(e(v)!=null)v.tick.run();
+  nav(v,0);v.game.speed=1;while(e(v)!=null)v.tick.run();
   Expedition complete=v.game.expeditionController.report();require(complete!=null&&complete.state()==Expedition.State.COMPLETED&&complete.rewardCredited,"completion grants before report confirmation");
   require(v.game.food==food+foodCargo&&v.game.water==water+waterCargo&&v.game.mats==mats+matsCargo,"exact core resource credit");
   require(v.game.expeditionWarehouse.get(ExpeditionLoot.Resource.MEDICINE)==medicine+medCargo&&v.game.expeditionWarehouse.get(ExpeditionLoot.Resource.EQUIPMENT)==equipment+equipCargo,"separate inventory credit");
   require(v.game.people.get(selected[0]).health==injuredHealth,"no second injury on return");
-  for(int index:selected){Resident r=v.game.people.get(index);require(r.status==Resident.Status.HOME&&r.job.equals("Отдых")&&v.game.homeRoomFor(r)==5,"resident available again");require(r.fatigue==complete.fatigueGain,"travel fatigue once");}
+  for(int index:selected){Resident r=v.game.people.get(index);require(r.status==Resident.Status.HOME&&r.job.equals("Отдых")&&v.game.homeRoomFor(r)==5,"resident available again");require(r.fatigue==(int)((complete.completedMinute-complete.departureMinute)*SurvivalConfig.WORK_FATIGUE_PER_DAY/1440),"minute travel fatigue, no return lump");}
   text(draw(v),"ОТРЯД ВЕРНУЛСЯ");require(v.game.screen==0,"completion report works over home");
   int total=v.game.food+v.game.water+v.game.mats+v.game.expeditionWarehouse.total();
   v.game.expeditionController.complete(complete);require(total==v.game.food+v.game.water+v.game.mats+v.game.expeditionWarehouse.total(),"repeated complete is idempotent");
@@ -103,7 +105,7 @@ public class RegressionProbe {
   v=fresh(420,840);start(v,"garage",0);close(v.game.expeditionController.professionBonus(e(v),ExpeditionLoot.Resource.MATERIALS),.1,"engineer +10%");
   for(Resident r:v.game.people){r.health=100;r.fatigue=0;}close(v.game.expeditionController.conditionFactor(e(v)),1,"healthy condition");
   v.game.people.get(0).health=50;close(v.game.expeditionController.conditionFactor(e(v)),.5,"health affects yield");
-  v.game.people.get(0).fatigue=100;close(v.game.expeditionController.conditionFactor(e(v)),.25,"fatigue affects yield");
+  v.game.people.get(0).fatigue=100;close(v.game.expeditionController.conditionFactor(e(v)),.2,"fatigue affects yield");
   for(MapLocation.Risk risk:MapLocation.Risk.values()){
    MapLocation target=v.game.cityLocations.get(3);MapLocation copy=new MapLocation("test","test","test","test",target.kind,target.distance,risk,.5f,.5f,MapLocation.State.AVAILABLE);
    double base=risk==MapLocation.Risk.LOW?.05:risk==MapLocation.Risk.LOW_MEDIUM?.10:risk==MapLocation.Risk.MEDIUM?.15:.25;
@@ -115,7 +117,7 @@ public class RegressionProbe {
   ExpeditionLoot cargo=found.cargo(30);require(cargo.get(ExpeditionLoot.Resource.WATER)==15&&cargo.get(ExpeditionLoot.Resource.FOOD)==15&&cargo.get(ExpeditionLoot.Resource.MEDICINE)==0,"cargo priority order");
   cargo=found.cargo(43);require(cargo.get(ExpeditionLoot.Resource.MEDICINE)==13&&cargo.get(ExpeditionLoot.Resource.MATERIALS)==0,"medicine before materials");
   v=fresh(420,840);for(int trip=0;trip<10;trip++){
-   start(v,"shop",0);until(v,Expedition.State.AWAITING_RETURN);require(v.game.cityLocations.get(0).depletion()==(trip+1)*10,"depletion each successful research");
+   v.game.people.get(0).hunger=v.game.people.get(0).thirst=v.game.people.get(0).fatigue=0;v.game.people.get(0).health=100;start(v,"shop",0);until(v,Expedition.State.AWAITING_RETURN);require(v.game.cityLocations.get(0).depletion()==(trip+1)*10,"depletion each successful research");
    v.game.expeditionController.returnHome(e(v).id);while(e(v)!=null)v.game.advanceMinute();
    v.game.expeditionController.acknowledge(v.game.expeditions.get(v.game.expeditions.size()-1).id);
   }

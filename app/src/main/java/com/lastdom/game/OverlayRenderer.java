@@ -17,45 +17,7 @@ final class OverlayRenderer {
   }
 
   void drawResidentOverlay(Canvas c) {
-    if (view.game.selected < 0 || view.game.selected >= view.game.people.size()) return;
-    Resident s = view.game.people.get(view.game.selected);
-    dimForOverlay(c);
-    float hh = view.H / view.scale, top = Math.max(285, hh - 405);
-    view.box(c, 18, top, 402, hh - 78, Color.rgb(25, 29, 33), 18);
-    view.bold(c, "×", 372, top + 31, 22, view.muted);
-    view.residentRenderer.drawMiniPortrait(c, s, 52, top + 45, view.game.selected);
-    view.bold(c, s.name, 78, top + 39, 19, view.text);
-    view.txt(c, s.role + " • навык " + s.skill, 78, top + 58, 10, view.accent);
-    view.txt(
-        c,
-        "Сейчас: "
-            + (view.game.isOnExpedition(s)
-                ? "В экспедиции — " + view.game.expeditionController.memberLocation(s)
-                : view.residentRenderer.residentState(s, view.game.selected)),
-        34,
-        top + 91,
-        11,
-        view.text);
-    view.txt(c, "Здоровье " + s.health + "%", 34, top + 119, 10, view.muted);
-    view.bar(c, 34, top + 128, 386, 8, s.health, view.good);
-    view.txt(c, "Голод " + s.hunger + "%", 34, top + 158, 10, view.muted);
-    view.txt(c, "Усталость " + s.fatigue + "%", 190, top + 158, 10, view.muted);
-    view.txt(c, "Мораль " + s.morale + "%", 34, top + 184, 10, view.muted);
-    boolean away = view.game.isOnExpedition(s) || view.game.isBuilding(s);
-    view.box(c, 34, top + 211, 386, top + 257, away ? view.panel2 : view.accent, 11);
-    view.bold(
-        c,
-        away
-            ? (view.game.isBuilding(s) ? "ЗАНЯТ СТРОИТЕЛЬСТВОМ" : "В ЭКСПЕДИЦИИ")
-            : "СМЕНИТЬ РАБОТУ",
-        116,
-        top + 240,
-        11,
-        away ? view.muted : Color.rgb(30, 27, 23));
-    view.box(c, 34, top + 266, 206, top + 309, view.panel2, 10);
-    view.bold(c, "ОТДЫХ", 91, top + 293, 10, view.text);
-    view.box(c, 214, top + 266, 386, top + 309, view.panel2, 10);
-    view.bold(c, "ЗАКРЫТЬ", 264, top + 293, 10, view.text);
+    view.residentNeedsRenderer.draw(c, false);
   }
 
   void drawRoomOverlay(Canvas c) {
@@ -63,30 +25,7 @@ final class OverlayRenderer {
   }
 
   void drawResidentsOverlay(Canvas c) {
-    dimForOverlay(c);
-    float hh = view.H / view.scale, top = Math.max(250, hh - 470);
-    view.box(c, 18, top, 402, hh - 78, Color.rgb(25, 29, 33), 18);
-    view.bold(c, "ЖИТЕЛИ", 34, top + 38, 18, view.text);
-    view.bold(c, "×", 372, top + 31, 22, view.muted);
-    float y = top + 65;
-    for (int i = 0; i < Math.min(6, view.game.people.size()); i++) {
-      Resident s = view.game.people.get(i);
-      view.box(c, 30, y, 390, y + 52, view.panel2, 10);
-      view.residentRenderer.drawMiniPortrait(c, s, 52, y + 25, i);
-      view.bold(c, s.name, 76, y + 23, 11, view.text);
-      view.txt(
-          c,
-          s.role
-              + " • "
-              + (view.game.isOnExpedition(s)
-                  ? "В экспедиции — " + view.game.expeditionController.memberLocation(s)
-                  : view.residentRenderer.residentState(s, i)),
-          76,
-          y + 41,
-          9,
-          s.job.equals("Отдых") ? view.blue : view.good);
-      y += 59;
-    }
+    view.residentNeedsRenderer.draw(c, true);
   }
 
   void drawRooms(Canvas c) {
@@ -131,19 +70,7 @@ final class OverlayRenderer {
   void drawLocationDialog(Canvas c, int li) {}
 
   void drawSurvivor(Canvas c) {
-    Resident s = view.game.people.get(view.game.selected);
-    view.hudRenderer.drawHeader(c, s.name + " • " + s.role);
-    view.box(c, 20, 90, 400, 350, view.panel, 16);
-    view.bold(c, s.name, 45, 135, 25, view.text);
-    view.txt(c, s.role + " • навык " + s.skill, 45, 160, 12, view.accent);
-    view.txt(c, "Здоровье " + s.health + "%", 45, 205, 12, view.text);
-    view.bar(c, 45, 215, 370, 9, s.health, view.good);
-    view.txt(c, "Голод " + s.hunger + "%   Усталость " + s.fatigue + "%", 45, 255, 11, view.muted);
-    view.txt(c, "Мораль " + s.morale + "%", 45, 285, 11, view.muted);
-    view.txt(c, "Сейчас: " + s.job, 45, 320, 12, view.accent);
-    view.box(c, 35, 390, 385, 448, view.accent, 12);
-    view.bold(c, "ИЗМЕНИТЬ РАБОТУ", 105, 425, 13, Color.rgb(30, 27, 23));
-    view.hudRenderer.bottomBack(c);
+    view.residentNeedsRenderer.draw(c, false);
   }
 
   void drawJournal(Canvas c) {
