@@ -150,6 +150,18 @@ def main():
         gameplay_probe = gameplay_probe.replace('if(m.getName().equals(name)){', 'if(m.getName().equals(name)&&m.getParameterCount()==args.length){')
         gameplay_probe = gameplay_probe.replace('System.out.println(label+":"+hash(c.commands.toString()));', '')
         gameplay_probe = gameplay_probe.replace('System.out.println("hitbox-grid-"+height+":"+hash(grid.toString()));', '')
+        # Stage 2 replaces automatic solo trips/rewards. Their new behavior is checked in
+        # expedition_regression.py; retain the old baseline for all unrelated simulation.
+        gameplay_probe = "\n".join(line for line in gameplay_probe.split("\n")
+                                    if not line.strip().startswith("for(int li=0;li<6;li++){fresh();"))
+        gameplay_probe = gameplay_probe.replace(',"Экспедиция"}', '}')
+        gameplay_probe = gameplay_probe.replace('call(game,"startExpedition",0);', '')
+        gameplay_probe = gameplay_probe.replace('if(!f.isSynthetic()){',
+            'if(!f.isSynthetic()&&!f.getName().equals("id")&&!f.getName().equals("status")){')
+        gameplay_probe = gameplay_probe.replace('state.put("saved",Context.preferences.values.toString());',
+            'TreeMap<String,Object> legacy=new TreeMap<>(Context.preferences.values);'
+            'legacy.keySet().removeIf(k->k.startsWith("exp2_")||k.matches("p[0-9]+_id"));'
+            'state.put("saved",legacy.toString());')
         fixtures.PROBE = gameplay_probe
         baseline = subprocess.check_output(["git", "show", f"{fixtures.BASELINE}:{fixtures.JAVA_PATH}/MainActivity.java"], cwd=root, text=True)
         original = {"com/lastdom/game/MainActivity.java": baseline, "com/lastdom/game/R.java": current["com/lastdom/game/R.java"]}

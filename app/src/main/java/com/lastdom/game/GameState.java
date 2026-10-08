@@ -12,6 +12,8 @@ class GameState {
   ArrayList<Resident> people = new ArrayList<>();
   ArrayList<String> log = new ArrayList<>();
   ArrayList<Location> locations = new ArrayList<>();
+  final java.util.List<MapLocation> cityLocations = CityMapController.defaultLocations();
+  final ArrayList<Expedition> expeditions = new ArrayList<>();
   String[] jobs = {"Отдых", "Еда", "Вода", "Материалы", "Ремонт", "Охрана", "Лечение"};
   String[] rooms = {"Генераторная", "Кухня", "Медпункт", "Мастерская", "Баррикады", "Спальня"};
   String[] roomJobs = {"Ремонт", "Еда", "Лечение", "Материалы", "Охрана", "Отдых"};

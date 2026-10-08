@@ -8,6 +8,7 @@ import java.util.Locale;
  */
 class GameController extends GameState {
 
+  final ExpeditionController expeditionController = new ExpeditionController(this);
   private final GameSaveStore saves;
   private final Runnable redraw;
 
@@ -55,6 +56,7 @@ class GameController extends GameState {
 
   void reset() {
     residentVisualReady = false;
+    expeditions.clear();
     day = 1;
     gameMinute = 480;
     speed = 1;
@@ -90,10 +92,6 @@ class GameController extends GameState {
 
   void advanceMinute() {
     gameMinute++;
-    if (expeditionPerson >= 0) {
-      expeditionRemaining--;
-      if (expeditionRemaining <= 0) finishExpedition();
-    }
     if (buildingRoom >= 0) {
       buildRemaining--;
       if (buildRemaining <= 0) {
@@ -108,7 +106,8 @@ class GameController extends GameState {
       day++;
       dailyCycle();
     }
-    if (gameMinute % 60 == 0) save();
+    boolean expeditionChanged = expeditionController.advanceMinute();
+    if (gameMinute % 60 == 0 || expeditionChanged) save();
   }
 
   String clock() {
@@ -132,7 +131,7 @@ class GameController extends GameState {
     for (int i = 0; i < 6; i++)
       roomCondition[i] = Math.max(15, roomCondition[i] - (1 + rnd.nextInt(3)));
     for (Resident s : people)
-      if (s.alive) {
+      if (s.alive && !isOnExpedition(s)) {
         s.hunger = Math.min(100, s.hunger + 10);
         if (food == 0 || water == 0) s.health = Math.max(0, s.health - 6);
         if (s.health <= 0) {
@@ -158,7 +157,7 @@ class GameController extends GameState {
   }
 
   int homeRoomFor(Resident s) {
-    if (!s.alive || s.job.equals("Экспедиция")) return -1;
+    if (!s.alive || isOnExpedition(s)) return -1;
     if (s.job.equals("Ремонт")) return 0;
     if (s.job.equals("Еда") || s.job.equals("Вода")) return 1;
     if (s.job.equals("Лечение")) return 2;
@@ -181,13 +180,13 @@ class GameController extends GameState {
     switch (i) {
       case 0:
         return "Стабилизирует энергоснабжение. Более высокий уровень снижает риск поломок и"
-                   + " усиливает работу инженеров.";
+            + " усиливает работу инженеров.";
       case 1:
         return "Повышает эффективность производства еды и позволяет лучше использовать запасы"
-                   + " убежища.";
+            + " убежища.";
       case 2:
         return "Ускоряет лечение раненых и восстановление здоровья жителей, назначенных на"
-                   + " лечение.";
+            + " лечение.";
       case 3:
         return "Повышает добычу и обработку материалов, а также эффективность механиков.";
       case 4:
@@ -205,82 +204,32 @@ class GameController extends GameState {
     return -1;
   }
 
+  // Compatibility entry point for existing callers; no legacy rewards or auto-return.
   void startExpedition(int li) {
-    if (expeditionPerson >= 0) {
-      addLog("Сначала дождитесь возвращения текущей экспедиции.");
-      return;
-    }
-    Location l = locations.get(li);
-    if (!l.discovered) return;
-    int pi = availableExplorer();
-    if (pi < 0) {
-      addLog("Нет свободного жителя для вылазки.");
-      return;
-    }
-    expeditionPerson = pi;
-    expeditionLocation = li;
-    expeditionRemaining = 90 + l.distance * 35;
-    people.get(pi).job = "Экспедиция";
-    addLog(
-        people.get(pi).name
-            + " отправился: "
-            + l.name
-            + ". Возвращение через "
-            + formatBuild(expeditionRemaining)
-            + ".");
-    save();
-    invalidate();
+    if (li < 0 || li >= cityLocations.size()) return;
+    int index = availableExplorer();
+    String result =
+        expeditionController.start(
+            cityLocations.get(li).id,
+            index < 0
+                ? java.util.Collections.emptyList()
+                : java.util.Collections.singletonList(people.get(index).id));
+    if (!result.isEmpty()) addLog(result);
   }
 
-  void finishExpedition() {
-    if (expeditionPerson < 0 || expeditionLocation < 0) return;
-    Resident s = people.get(expeditionPerson);
-    Location l = locations.get(expeditionLocation);
-    int night = (gameMinute / 60 >= 22 || gameMinute / 60 < 6) ? 12 : 0;
-    int risk = Math.min(85, l.risk + night);
-    boolean hurt = rnd.nextInt(100) < risk;
-    int stockFactor = Math.max(20, l.stock);
-    int gain = 1 + rnd.nextInt(Math.max(2, stockFactor / 18));
-    if (l.name.equals("Продуктовый")) {
-      food += gain + 3;
-      water += gain + 2;
-    } else if (l.name.equals("Аптека")) {
-      s.health = Math.min(100, s.health + 8);
-      mats += gain;
-    } else if (l.name.equals("Гаражи")) {
-      mats += gain + 4;
-    } else if (l.name.equals("Склад")) {
-      food += gain;
-      water += gain;
-      mats += gain + 5;
-    } else if (l.name.equals("Больница")) {
-      mats += gain + 3;
-      s.health = Math.min(100, s.health + 15);
-    } else {
-      food += gain;
-      water += gain;
-      mats += Math.max(1, gain / 2);
-    }
-    l.stock = Math.max(0, l.stock - (8 + rnd.nextInt(13)));
-    if (hurt) {
-      int dmg = 8 + rnd.nextInt(20);
-      s.health = Math.max(1, s.health - dmg);
-      addLog(s.name + " вернулся раненым из " + l.name + " (-" + dmg + " здоровья). ");
-    } else addLog(s.name + " вернулся из " + l.name + " с припасами.");
-    s.job = "Отдых";
-    s.fatigue = Math.min(100, s.fatigue + 22);
-    if (rnd.nextInt(100) < 35) {
-      for (Location q : locations)
-        if (!q.discovered) {
-          q.discovered = true;
-          addLog("Открыта новая точка: " + q.name + ".");
-          break;
-        }
-    }
-    expeditionPerson = -1;
-    expeditionLocation = -1;
-    expeditionRemaining = 0;
+  boolean isOnExpedition(Resident resident) {
+    return resident.job.equals("Экспедиция") || expeditionController.contains(resident);
+  }
+
+  boolean assignJob(int index, String job) {
+    if (index < 0
+        || index >= people.size()
+        || !people.get(index).alive
+        || isOnExpedition(people.get(index))) return false;
+    people.get(index).job = job;
     save();
+    invalidate();
+    return true;
   }
 
   String formatBuild(int m) {
@@ -320,7 +269,7 @@ class GameController extends GameState {
   void processJobs() {
     int guards = 0, medics = 0;
     for (Resident s : people)
-      if (s.alive) {
+      if (s.alive && !isOnExpedition(s)) {
         s.fatigue = Math.max(0, Math.min(100, s.fatigue + (s.job.equals("Отдых") ? -22 : 13)));
         if (s.fatigue > 85 && !s.job.equals("Отдых")) {
           s.health = Math.max(1, s.health - 4);
@@ -347,7 +296,8 @@ class GameController extends GameState {
     threat = Math.max(0, threat - guards);
     if (medics > 0)
       for (Resident s : people)
-        if (s.alive && s.health < 100) s.health = Math.min(100, s.health + medics / 2);
+        if (s.alive && !isOnExpedition(s) && s.health < 100)
+          s.health = Math.min(100, s.health + medics / 2);
   }
 
   void triggerEvent() {
@@ -384,7 +334,7 @@ class GameController extends GameState {
     }
     if (pick >= 0 && wanted != null) {
       Resident s = people.get(pick);
-      if (!s.job.equals("Экспедиция")) {
+      if (!isOnExpedition(s)) {
         s.job = wanted;
         addLog(s.name + " автоматически реагирует: " + wanted.toLowerCase() + ".");
       }
@@ -395,7 +345,7 @@ class GameController extends GameState {
     int best = -1, score = -999;
     for (int i = 0; i < people.size(); i++) {
       Resident s = people.get(i);
-      if (!s.alive || s.job.equals("Экспедиция")) continue;
+      if (!s.alive || isOnExpedition(s)) continue;
       int v = s.skill * 5 - s.fatigue / 8 + s.health / 12;
       if (s.role.equals(role1) || (!role2.isEmpty() && s.role.equals(role2))) v += 40;
       if (v > score) {
@@ -431,9 +381,13 @@ class GameController extends GameState {
         addLog("Генераторная повреждена.");
       }
     } else if (eventTitle.equals("БОЛЕЗНЬ")) {
-      Resident q = people.get(rnd.nextInt(people.size()));
-      q.health = Math.max(1, q.health + (n == 0 ? 10 : -12));
-      addLog(n == 0 ? "Больному помогли." : "Болезнь ослабила жителя.");
+      java.util.List<Resident> present = new java.util.ArrayList<>();
+      for (Resident s : people) if (!isOnExpedition(s)) present.add(s);
+      if (!present.isEmpty()) {
+        Resident q = present.get(rnd.nextInt(present.size()));
+        q.health = Math.max(1, q.health + (n == 0 ? 10 : -12));
+        addLog(n == 0 ? "Больному помогли." : "Болезнь ослабила жителя.");
+      }
     } else if (eventTitle.equals("МАРОДЁРЫ")) {
       if (n == 0) food = Math.max(0, food - 7);
       else {
@@ -442,7 +396,8 @@ class GameController extends GameState {
       }
       addLog("Столкновение у баррикад завершилось.");
     } else {
-      for (Resident s : people) if (s.alive) s.fatigue = Math.max(0, s.fatigue - (n == 0 ? 15 : 5));
+      for (Resident s : people)
+        if (s.alive && !isOnExpedition(s)) s.fatigue = Math.max(0, s.fatigue - (n == 0 ? 15 : 5));
       addLog("Ночь использовали с пользой.");
     }
     event = false;

@@ -28,7 +28,10 @@ final class OverlayRenderer {
     view.txt(c, s.role + " • навык " + s.skill, 78, top + 58, 10, view.accent);
     view.txt(
         c,
-        "Сейчас: " + view.residentRenderer.residentState(s, view.game.selected),
+        "Сейчас: "
+            + (view.game.isOnExpedition(s)
+                ? "В экспедиции"
+                : view.residentRenderer.residentState(s, view.game.selected)),
         34,
         top + 91,
         11,
@@ -38,8 +41,15 @@ final class OverlayRenderer {
     view.txt(c, "Голод " + s.hunger + "%", 34, top + 158, 10, view.muted);
     view.txt(c, "Усталость " + s.fatigue + "%", 190, top + 158, 10, view.muted);
     view.txt(c, "Мораль " + s.morale + "%", 34, top + 184, 10, view.muted);
-    view.box(c, 34, top + 211, 386, top + 257, view.accent, 11);
-    view.bold(c, "СМЕНИТЬ РАБОТУ", 116, top + 240, 11, Color.rgb(30, 27, 23));
+    boolean away = view.game.isOnExpedition(s);
+    view.box(c, 34, top + 211, 386, top + 257, away ? view.panel2 : view.accent, 11);
+    view.bold(
+        c,
+        away ? "В ЭКСПЕДИЦИИ" : "СМЕНИТЬ РАБОТУ",
+        116,
+        top + 240,
+        11,
+        away ? view.muted : Color.rgb(30, 27, 23));
     view.box(c, 34, top + 266, 206, top + 309, view.panel2, 10);
     view.bold(c, "ОТДЫХ", 91, top + 293, 10, view.text);
     view.box(c, 214, top + 266, 386, top + 309, view.panel2, 10);
@@ -105,7 +115,11 @@ final class OverlayRenderer {
       view.bold(c, s.name, 76, y + 23, 11, view.text);
       view.txt(
           c,
-          s.role + " • " + view.residentRenderer.residentState(s, i),
+          s.role
+              + " • "
+              + (view.game.isOnExpedition(s)
+                  ? "В экспедиции"
+                  : view.residentRenderer.residentState(s, i)),
           76,
           y + 41,
           9,

@@ -42,6 +42,7 @@ final class CityMapRenderer {
     drawFog(canvas, layout);
     drawShelter(canvas, layout);
     for (MapLocation location : view.cityMap.locations) drawMarker(canvas, location, layout);
+    view.expeditionRenderer.drawRoute(canvas, layout);
     text(canvas, "С", 378, layout.top + 23, 9, MUTED, true);
     line(canvas, 381, layout.top + 30, 381, layout.top + 49, 1, MUTED);
     line(canvas, 381, layout.top + 30, 377, layout.top + 36, 1, MUTED);
@@ -49,6 +50,8 @@ final class CityMapRenderer {
     text(canvas, "ВЫБЕРИТЕ ТОЧКУ ДЛЯ РАЗВЕДКИ", 30, layout.bottom - 11, 8, MUTED, false);
     view.hudRenderer.drawNav(canvas);
     if (view.cityMap.selected() != null) drawSelection(canvas, layout);
+    view.expeditionPreparationRenderer.draw(canvas, layout);
+    view.expeditionRenderer.drawPanel(canvas, layout);
   }
 
   private void drawHeader(Canvas canvas) {
@@ -265,16 +268,20 @@ final class CityMapRenderer {
       row(c, "Расстояние", location.distance.label, m.panelTop + 114, INK);
       row(c, "Риск", location.risk.label, m.panelTop + 145, riskColor(location));
       row(c, "Статус", location.statusLabel(), m.panelTop + 176, MUTED);
-      if (view.cityMap.preparationNotice())
-        wrap(
-            c,
-            "Подготовка экспедиции появится на следующем этапе",
-            34,
-            m.panelTop + 207,
-            380,
-            10,
-            WARM,
-            15);
+      text(c, "Путь туда / обратно", 34, m.panelTop + 203, 10, MUTED, false);
+      text(
+          c,
+          ExpeditionConfig.oneWayMinutes(location)
+              + " / "
+              + ExpeditionConfig.oneWayMinutes(location)
+              + " мин.",
+          194,
+          m.panelTop + 203,
+          11,
+          INK,
+          true);
+      if (!view.cityMap.message.isEmpty())
+        wrap(c, view.cityMap.message, 34, m.panelTop + 226, 386, 10, WARM, 12);
       rounded(c, 34, m.panelBottom - 66, 386, m.panelBottom - 24, WARM, 10);
       centered(
           c, "ПОДГОТОВИТЬ ЭКСПЕДИЦИЮ", 210, m.panelBottom - 40, 11, Color.rgb(27, 32, 36), true);

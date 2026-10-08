@@ -43,9 +43,9 @@ public class RegressionProbe {
      tap(v,210,m.panelBottom-40);require(v.cityMap.selected()==null,"locked panel closes");
     }else{
      available++;text(panel,p.name.toUpperCase(Locale.ROOT));text(panel,p.loot);text(panel,p.distance.label);text(panel,p.risk.label);text(panel,"Не исследовано");
-     tap(v,210,m.panelBottom-40);require(v.cityMap.preparationNotice(),"preparation is informational");
-     text(draw(v),"Подготовка экспедиции");require(save(v).equals(original),"no simulation/save side effects");
-     nav(v,0,logicalHeight);require(game.screen==GameView.CITY_MAP&&v.cityMap.selected()==null,"modal dismissal consumes footer tap");
+     tap(v,210,m.panelBottom-40);require(v.cityMap.preparation()==p,"preparation uses selected location");
+     text(draw(v),"ПОДГОТОВКА ЭКСПЕДИЦИИ");require(save(v).equals(original),"preparation alone has no simulation/save side effects");
+     tap(v,210,m.panelBottom-80);require(game.screen==GameView.CITY_MAP&&v.cityMap.preparation()==null,"back closes preparation");
     }
    }
    require(available==4&&locked==2,"four available and two locked");
@@ -71,7 +71,7 @@ public class RegressionProbe {
   String snapshot=save(old);nav(old,2,840);CityMapLayout m=new CityMapLayout(840);
   MapLocation p=old.cityMap.locations.get(0);tap(old,m.x(p.mapX),m.y(p.mapY));tap(old,210,m.panelBottom-40);
   require(snapshot.equals(save(old)),"existing expedition remains unchanged by Stage 1");
-  require(MapLocation.State.values().length==5,"future location states available");
+  require(MapLocation.State.values().length==5,"location states available");
   p.setState(MapLocation.State.SEARCHED);require(p.state()==MapLocation.State.SEARCHED,"state can evolve later");
   System.out.println("PASS: "+checks+" city map assertions; six screen sizes, both entries, six markers, panels, modal priority, navigation, AI and legacy saves.");
  }

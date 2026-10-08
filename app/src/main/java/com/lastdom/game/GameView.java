@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v0.9.6 • CITY MAP • STAGE 1";
+  static final String VERSION_LABEL = "v0.9.6 • EXPEDITIONS • STAGE 2";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -39,14 +39,18 @@ public final class GameView extends View {
   final ResidentRenderer residentRenderer = new ResidentRenderer(this);
   final HudRenderer hudRenderer = new HudRenderer(this);
   final OverlayRenderer overlayRenderer = new OverlayRenderer(this);
-  final CityMapController cityMap = new CityMapController();
+  final CityMapController cityMap;
   final CityMapRenderer cityMapRenderer = new CityMapRenderer(this);
+  final ExpeditionRenderer expeditionRenderer = new ExpeditionRenderer(this);
+  final ExpeditionPreparationRenderer expeditionPreparationRenderer =
+      new ExpeditionPreparationRenderer(this);
 
   public GameView(Context context) {
     super(context);
     shelterBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.shelter_clean);
     fullSceneBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.shelter_full_scene);
     game = new GameController(context.getSharedPreferences("save_v02", 0), this::invalidate);
+    cityMap = new CityMapController(game);
     timer.postDelayed(tick, 1000);
   }
 
@@ -186,7 +190,7 @@ public final class GameView extends View {
       for (int i = 0; i < game.jobs.length; i++) {
         float yy = t + 55 + i * 45;
         if (y >= yy && y <= yy + 36) {
-          game.people.get(game.selected).job = game.jobs[i];
+          game.assignJob(game.selected, game.jobs[i]);
           game.jobMenu = false;
           game.overlay = 1;
           game.addLog(game.people.get(game.selected).name + ": " + game.jobs[i] + ".");
@@ -211,12 +215,13 @@ public final class GameView extends View {
       }
       if (game.overlay == 1) {
         if (y >= top + 211 && y <= top + 257) {
+          if (game.isOnExpedition(game.people.get(game.selected))) return true;
           game.jobMenu = true;
           invalidate();
           return true;
         }
         if (y >= top + 266 && y <= top + 309 && x < 210) {
-          game.people.get(game.selected).job = "Отдых";
+          game.assignJob(game.selected, "Отдых");
           game.save();
           invalidate();
           return true;
@@ -235,7 +240,7 @@ public final class GameView extends View {
         if (y >= top + 259 && y <= top + 302 && x < 210) {
           int idx = -1;
           for (int i = 0; i < game.people.size(); i++)
-            if (game.people.get(i).alive) {
+            if (game.people.get(i).alive && !game.isOnExpedition(game.people.get(i))) {
               idx = i;
               break;
             }

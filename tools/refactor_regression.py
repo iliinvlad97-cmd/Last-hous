@@ -75,7 +75,7 @@ public class View {
  public View(android.content.Context c){context=c;}
  public android.content.res.Resources getResources(){return context.getResources();}
  public int getWidth(){return width;} public int getHeight(){return height;}
- public void invalidate(){} public void postInvalidateDelayed(long delay){}
+ public void invalidate(){} public void postInvalidateOnAnimation(){} public void postInvalidateDelayed(long delay){}
  protected void onDraw(android.graphics.Canvas c){}
  public boolean onTouchEvent(MotionEvent e){return false;}
 }
