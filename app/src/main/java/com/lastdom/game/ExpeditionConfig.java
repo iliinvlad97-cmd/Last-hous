@@ -5,6 +5,10 @@ final class ExpeditionConfig {
   static final int MAX_PARTICIPANTS = 3;
   static final int MAX_ACTIVE = 1;
 
+  static int maxActive(Expedition.Type type) {
+    return type == Expedition.Type.RECON ? ExplorationConfig.MAX_ACTIVE_RECON : MAX_ACTIVE;
+  }
+
   static int oneWayMinutes(MapLocation location) {
     switch (location.distance) {
       case NEAR:

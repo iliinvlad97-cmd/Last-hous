@@ -17,7 +17,8 @@ final class ExpeditionPreparationRenderer {
     ExpeditionPreparationLayout layout = new ExpeditionPreparationLayout(map.panelBottom);
     view.box(c, 0, 0, 420, view.H / view.scale, android.graphics.Color.argb(205, 9, 14, 19), 0);
     view.box(c, 18, 70, 402, layout.bottom, view.panel, 16);
-    view.bold(c, "ПОДГОТОВКА ЭКСПЕДИЦИИ", 30, 102, 17, view.text);
+    boolean recon = target.kind == MapLocation.Kind.DISTRICT;
+    view.bold(c, recon ? "ПОДГОТОВКА РАЗВЕДКИ" : "ПОДГОТОВКА ЭКСПЕДИЦИИ", 30, 102, 17, view.text);
     view.bold(c, target.name, 30, 130, 14, view.accent);
     view.txt(c, target.distance.label + " • Риск: " + target.risk.label, 30, 155, 11, view.muted);
     int minutes = ExpeditionConfig.oneWayMinutes(target);
@@ -30,11 +31,20 @@ final class ExpeditionPreparationRenderer {
         view.text);
     view.txt(
         c,
-        "Исследование: "
-            + ExpeditionConfig.explorationMinutes(target)
-            + " мин. • Груз: "
-            + (ui.selectedIds.size() * 10)
-            + " ед.",
+        recon
+            ? "Разведка: "
+                + view.game.explorationController.district(target.id).config.researchMinutes
+                + " мин. • Шанс: "
+                + String.format(
+                    java.util.Locale.ROOT,
+                    "%.2f",
+                    view.game.explorationController.chanceBasis(target.id, ui.selectedIds) / 100.0)
+                + "%"
+            : "Исследование: "
+                + ExpeditionConfig.explorationMinutes(target)
+                + " мин. • Груз: "
+                + (ui.selectedIds.size() * 10)
+                + " ед.",
         30,
         194,
         9,
@@ -106,7 +116,7 @@ final class ExpeditionPreparationRenderer {
         9);
     view.bold(
         c,
-        "ОТПРАВИТЬ ЭКСПЕДИЦИЮ",
+        recon ? "ОТПРАВИТЬ РАЗВЕДКУ" : "ОТПРАВИТЬ ЭКСПЕДИЦИЮ",
         112,
         layout.sendTop + 26,
         11,

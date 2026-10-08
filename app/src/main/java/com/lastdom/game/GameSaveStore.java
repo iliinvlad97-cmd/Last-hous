@@ -69,6 +69,7 @@ final class GameSaveStore {
     for (int i = 0; i < game.expeditions.size(); i++) {
       Expedition expedition = game.expeditions.get(i);
       String key = "exp2_" + i + "_";
+      ExplorationSaveStore.saveExpedition(expedition, key, e);
       e.putString(key + "location", expedition.locationId)
           .putString(
               key + "participants", android.text.TextUtils.join(",", expedition.participantIds))
@@ -131,6 +132,7 @@ final class GameSaveStore {
     }
     for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
       e.putInt("exp_store_" + resource.name(), game.expeditionWarehouse.get(resource));
+    ExplorationSaveStore.save(game, e);
     saveUpgrades(game, e);
     e.putInt("survival6_schema", 1)
         .putInt("survival6_resourceWarnings", game.survivalController.resourceWarnings)
@@ -162,14 +164,12 @@ final class GameSaveStore {
             MapLocation.State.valueOf(
                 sp.getString(
                     "map_" + location.id + "_state",
-                    location.kind == MapLocation.Kind.WATER
-                            || location.kind == MapLocation.Kind.HOSPITAL
-                        ? "LOCKED"
-                        : "AVAILABLE")));
+                    ExplorationConfig.initialLocationState(location).name())));
       } catch (IllegalArgumentException exception) {
         /* Keep the configuration's safe state. */
       }
     }
+    ExplorationSaveStore.load(game, sp);
     for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
       game.expeditionWarehouse.set(resource, sp.getInt("exp_store_" + resource.name(), 0));
     game.residentVisualReady = false;
@@ -453,8 +453,9 @@ final class GameSaveStore {
             || new java.util.HashSet<>(ids).size() != ids.size()
             || departure < 0) throw new IllegalArgumentException();
         for (String id : ids)
-          if (game.expeditionController.resident(id) == null || used.contains(id))
-            throw new IllegalArgumentException();
+          if (game.expeditionController.resident(id) == null
+              || ((state != Expedition.State.COMPLETED && state != Expedition.State.FAILED)
+                  && used.contains(id))) throw new IllegalArgumentException();
         if (state == Expedition.State.TRAVELING_TO_TARGET && elapsed == duration)
           state = Expedition.State.AT_LOCATION;
         if (state == Expedition.State.AT_LOCATION) elapsed = duration;
@@ -536,18 +537,24 @@ final class GameSaveStore {
           throw new IllegalArgumentException();
         if (state == Expedition.State.COMPLETED && !expedition.rewardCredited)
           throw new IllegalArgumentException();
+        ExplorationSaveStore.loadExpedition(game, expedition, key, sp);
         if (state == Expedition.State.AT_LOCATION) {
           expedition.beginPhase(
               Expedition.State.EXPLORING,
-              ExpeditionConfig.explorationMinutes(game.expeditionController.location(target)),
+              expedition.type == Expedition.Type.RECON
+                  ? expedition.recon.researchMinutes
+                  : ExpeditionConfig.explorationMinutes(game.expeditionController.location(target)),
               game.expeditionController.now());
         }
         if (state == Expedition.State.EXPLORING && expedition.resultGenerated)
           expedition.beginPhase(
               Expedition.State.AWAITING_RETURN, 1, game.expeditionController.now());
         if (expedition.active()
-            && game.expeditions.stream().filter(Expedition::active).count()
-                >= ExpeditionConfig.MAX_ACTIVE) throw new IllegalArgumentException();
+            && game.expeditions.stream()
+                    .filter(existing -> existing.active() && existing.type == expedition.type)
+                    .count()
+                >= ExpeditionConfig.maxActive(expedition.type))
+          throw new IllegalArgumentException();
         if (game.expeditions.stream().anyMatch(existing -> existing.id.equals(expedition.id)))
           throw new IllegalArgumentException();
         game.expeditions.add(expedition);

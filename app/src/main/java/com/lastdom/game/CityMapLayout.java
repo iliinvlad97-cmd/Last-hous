@@ -12,6 +12,10 @@ final class CityMapLayout {
     panelBottom = logicalHeight - 86f;
   }
 
+  float expeditionRow(Expedition.Type type) {
+    return bottom - 53 - (type == Expedition.Type.RECON ? 34 : 0);
+  }
+
   float x(float normalized) {
     return left + (right - left) * normalized;
   }

@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v1.0.2 • KITCHEN & ASSIGNMENTS • STAGE 8.1";
+  static final String VERSION_LABEL = "v1.1.0 • CITY EXPLORATION • STAGE 9";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -29,11 +29,7 @@ public final class GameView extends View {
           if (!game.paused && !game.gameOver && !game.event) {
             for (int i = 0; i < game.speed && !game.event && !game.gameOver; i++)
               game.advanceMinute();
-            if (game.screen == CITY_MAP
-                || (game.expeditionController.report() != null
-                    && (game.expeditionController.report().state() == Expedition.State.COMPLETED
-                        || game.expeditionController.report().state()
-                            == Expedition.State.AWAITING_DECISION))) cityMap.openPendingReport();
+            cityMap.openPendingReport();
             defensePanel.pending();
             invalidate();
           }
@@ -53,6 +49,8 @@ public final class GameView extends View {
   final CityMapController cityMap;
   final RoomUpgradePanelController roomUpgradePanel;
   final RoomUpgradeRenderer roomUpgradeRenderer = new RoomUpgradeRenderer(this);
+  final DistrictRenderer districtRenderer = new DistrictRenderer(this);
+  final ReconReportRenderer reconReportRenderer = new ReconReportRenderer(this);
   final CityMapRenderer cityMapRenderer = new CityMapRenderer(this);
   final ExpeditionRenderer expeditionRenderer = new ExpeditionRenderer(this);
   final ExpeditionEventRenderer expeditionEventRenderer = new ExpeditionEventRenderer(this);

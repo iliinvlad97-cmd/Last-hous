@@ -6,6 +6,14 @@ import java.util.List;
 
 /** Persisted squad identity and progress measured exclusively in simulation minutes. */
 final class Expedition {
+  enum Type {
+    LOOT,
+    RECON
+  }
+
+  Type type = Type.LOOT;
+  ReconData recon;
+
   enum State {
     PREPARING,
     TRAVELING_TO_TARGET,
@@ -87,7 +95,7 @@ final class Expedition {
   String phaseLabel() {
     switch (state) {
       case EXPLORING:
-        return "Исследование";
+        return type == Type.RECON ? "Разведка" : "Исследование";
       case AWAITING_DECISION:
         return explorationEvent.effectsApplied ? "Решение принято" : "Ждёт решения";
       case AWAITING_RETURN:

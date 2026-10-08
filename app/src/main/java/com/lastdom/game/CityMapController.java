@@ -15,74 +15,77 @@ final class CityMapController {
   }
 
   static List<MapLocation> defaultLocations() {
-    return Collections.unmodifiableList(
-        Arrays.asList(
-            new MapLocation(
-                "shop",
-                "Заброшенный магазин",
-                "ЗАБРОШЕННЫЙ\nМАГАЗИН",
-                "Еда",
-                MapLocation.Kind.STORE,
-                MapLocation.Distance.NEAR,
-                MapLocation.Risk.LOW,
-                .22f,
-                .65f,
-                MapLocation.State.AVAILABLE),
-            new MapLocation(
-                "pharmacy",
-                "Аптека",
-                "АПТЕКА",
-                "Медикаменты",
-                MapLocation.Kind.PHARMACY,
-                MapLocation.Distance.NEAR,
-                MapLocation.Risk.LOW_MEDIUM,
-                .69f,
-                .63f,
-                MapLocation.State.AVAILABLE),
-            new MapLocation(
-                "garage",
-                "Автосервис",
-                "АВТОСЕРВИС",
-                "Материалы / детали",
-                MapLocation.Kind.GARAGE,
-                MapLocation.Distance.MEDIUM,
-                MapLocation.Risk.MEDIUM,
-                .18f,
-                .39f,
-                MapLocation.State.AVAILABLE),
-            new MapLocation(
-                "police",
-                "Полицейский участок",
-                "ПОЛИЦЕЙСКИЙ\nУЧАСТОК",
-                "Снаряжение",
-                MapLocation.Kind.POLICE,
-                MapLocation.Distance.MEDIUM,
-                MapLocation.Risk.HIGH,
-                .73f,
-                .36f,
-                MapLocation.State.AVAILABLE),
-            new MapLocation(
-                "water",
-                "Водонапорная станция",
-                "ВОДОНАПОРНАЯ\nСТАНЦИЯ",
-                "Вода",
-                MapLocation.Kind.WATER,
-                MapLocation.Distance.FAR,
-                MapLocation.Risk.MEDIUM,
-                .26f,
-                .14f,
-                MapLocation.State.LOCKED),
-            new MapLocation(
-                "hospital",
-                "Больница",
-                "БОЛЬНИЦА",
-                "Медикаменты / редкие ресурсы",
-                MapLocation.Kind.HOSPITAL,
-                MapLocation.Distance.FAR,
-                MapLocation.Risk.HIGH,
-                .74f,
-                .13f,
-                MapLocation.State.LOCKED)));
+    java.util.ArrayList<MapLocation> points =
+        new java.util.ArrayList<>(
+            Arrays.asList(
+                new MapLocation(
+                    "shop",
+                    "Заброшенный магазин",
+                    "ЗАБРОШЕННЫЙ\nМАГАЗИН",
+                    "Еда",
+                    MapLocation.Kind.STORE,
+                    MapLocation.Distance.NEAR,
+                    MapLocation.Risk.LOW,
+                    .22f,
+                    .65f,
+                    MapLocation.State.AVAILABLE),
+                new MapLocation(
+                    "pharmacy",
+                    "Аптека",
+                    "АПТЕКА",
+                    "Медикаменты",
+                    MapLocation.Kind.PHARMACY,
+                    MapLocation.Distance.NEAR,
+                    MapLocation.Risk.LOW_MEDIUM,
+                    .69f,
+                    .63f,
+                    MapLocation.State.AVAILABLE),
+                new MapLocation(
+                    "garage",
+                    "Автосервис",
+                    "АВТОСЕРВИС",
+                    "Материалы / детали",
+                    MapLocation.Kind.GARAGE,
+                    MapLocation.Distance.MEDIUM,
+                    MapLocation.Risk.MEDIUM,
+                    .18f,
+                    .39f,
+                    MapLocation.State.AVAILABLE),
+                new MapLocation(
+                    "police",
+                    "Полицейский участок",
+                    "ПОЛИЦЕЙСКИЙ\nУЧАСТОК",
+                    "Снаряжение",
+                    MapLocation.Kind.POLICE,
+                    MapLocation.Distance.MEDIUM,
+                    MapLocation.Risk.HIGH,
+                    .73f,
+                    .36f,
+                    MapLocation.State.AVAILABLE),
+                new MapLocation(
+                    "water",
+                    "Водонапорная станция",
+                    "ВОДОНАПОРНАЯ\nСТАНЦИЯ",
+                    "Вода",
+                    MapLocation.Kind.WATER,
+                    MapLocation.Distance.FAR,
+                    MapLocation.Risk.MEDIUM,
+                    .26f,
+                    .14f,
+                    MapLocation.State.LOCKED),
+                new MapLocation(
+                    "hospital",
+                    "Больница",
+                    "БОЛЬНИЦА",
+                    "Медикаменты / редкие ресурсы",
+                    MapLocation.Kind.HOSPITAL,
+                    MapLocation.Distance.FAR,
+                    MapLocation.Risk.HIGH,
+                    .74f,
+                    .13f,
+                    MapLocation.State.LOCKED)));
+    points.addAll(ExplorationConfig.destinations());
+    return Collections.unmodifiableList(points);
   }
 
   final List<MapLocation> locations;
@@ -90,7 +93,9 @@ final class CityMapController {
 
   CityMapController(GameController game) {
     this.game = game;
-    locations = game.cityLocations;
+    locations =
+        game.cityLocations.subList(
+            0, 6); // Existing map projection keeps its six original identities.
   }
 
   private MapLocation selected;
@@ -99,41 +104,77 @@ final class CityMapController {
   String message = "";
   int page;
   boolean expeditionPanel, eventPanel;
-  float displayProgress;
+  float displayProgress, reconDisplayProgress;
+  boolean districtsLayer;
+  String districtFilterId = "", expeditionId = "";
+  private final java.util.Set<String> shownReports = new java.util.HashSet<>();
   int panelScroll, panelLineCount;
   private float dragY, dragStartY;
   private boolean dragging, moved;
-  private String autoReportId = "";
+
+  Expedition panelExpedition() {
+    Expedition selected = game.expeditionController.find(expeditionId);
+    return selected != null ? selected : game.expeditionController.report();
+  }
+
+  void openExpedition(Expedition e) {
+    closeSelection();
+    expeditionId = e.id;
+    panelScroll = 0;
+    eventPanel = e.state() == Expedition.State.AWAITING_DECISION;
+    expeditionPanel = !eventPanel;
+  }
 
   void openPendingReport() {
-    Expedition expedition = game.expeditionController.report();
-    if (expedition == null) return;
-    if (expedition.state() == Expedition.State.AWAITING_DECISION
-        && expedition.explorationEvent.interactive()) {
-      String key =
-          expedition.explorationEvent.instanceId + expedition.explorationEvent.effectsApplied;
-      if (key.equals(autoReportId)) return;
-      autoReportId = key;
-      closeSelection();
-      eventPanel = true;
-      return;
+    if (eventPanel || expeditionPanel) return;
+    for (int pass = 0; pass < 2; pass++)
+      for (int i = game.expeditions.size() - 1; i >= 0; i--) {
+        Expedition e = game.expeditions.get(i);
+        boolean event =
+            e.state() == Expedition.State.AWAITING_DECISION && e.explorationEvent.interactive();
+        if (pass == 0 && !event) continue;
+        if (pass == 1
+            && (event
+                || (e.state() != Expedition.State.AWAITING_RETURN
+                    && (e.state() != Expedition.State.COMPLETED || e.reportAcknowledged))))
+          continue;
+        String key =
+            event
+                ? e.explorationEvent.instanceId + e.explorationEvent.effectsApplied
+                : e.id + e.state();
+        if (shownReports.contains(key)) continue;
+        shownReports.add(key);
+        openExpedition(e);
+        return;
+      }
+  }
+
+  java.util.List<MapLocation> visibleLocations() {
+    java.util.List<MapLocation> visible = new java.util.ArrayList<>();
+    if (districtsLayer) {
+      for (CityDistrict d : game.cityDistricts)
+        visible.add(game.expeditionController.location(d.config.id));
+    } else if (districtFilterId.isEmpty()) visible.addAll(locations);
+    else {
+      CityDistrict d = game.explorationController.district(districtFilterId);
+      if (d != null && d.state == CityDistrict.State.EXPLORED)
+        for (String id : d.config.points) visible.add(game.expeditionController.location(id));
     }
-    if (expedition.state() != Expedition.State.AWAITING_RETURN
-        && expedition.state() != Expedition.State.COMPLETED) return;
-    String key = expedition.id + expedition.state();
-    if (key.equals(autoReportId)) return;
-    autoReportId = key;
-    closeSelection();
-    expeditionPanel = true;
+    return visible;
+  }
+
+  String layerName() {
+    CityDistrict d = game.explorationController.district(districtFilterId);
+    return districtsLayer ? "Районы города" : d == null ? "Начальные точки" : d.config.name;
   }
 
   boolean scrollTouch(int action, float y, CityMapLayout layout) {
     boolean panel = eventPanel || expeditionPanel || selected != null;
-    Expedition current = game.expeditionController.active();
+    Expedition current = panelExpedition();
     float footer =
         eventPanel && current != null
             ? new ExpeditionEventLayout(layout, current.explorationEvent).footer
-            : 84;
+            : selected != null && selected.kind == MapLocation.Kind.DISTRICT ? 132 : 84;
     if (!panel) return false;
     if (action == android.view.MotionEvent.ACTION_DOWN) {
       dragging = y >= layout.panelTop + 75 && y <= layout.panelBottom - footer;
@@ -180,6 +221,7 @@ final class CityMapController {
   void closeSelection() {
     selected = null;
     preparation = null;
+    expeditionId = "";
     selectedIds.clear();
     message = "";
     page = 0;
@@ -190,13 +232,22 @@ final class CityMapController {
   }
 
   private void prepare() {
-    if (selected == null || selected.isLocked()) return;
+    if (selected == null) return;
+    if (selected.kind == MapLocation.Kind.DISTRICT) {
+      message = game.explorationController.unavailableReason(selected.id);
+      if (!message.isEmpty()) {
+        panelScroll = 0;
+        return;
+      }
+    } else if (selected.isLocked()) return;
     if (selected.depleted()) {
       message = "Локация истощена";
       panelScroll = 0;
       return;
     }
-    if (game.expeditionController.active() != null || game.expeditionPerson >= 0) {
+    if (selected.kind != MapLocation.Kind.DISTRICT
+        && (game.expeditionController.active(Expedition.Type.LOOT) != null
+            || game.expeditionPerson >= 0)) {
       message = "Сначала завершите текущую экспедицию";
       panelScroll = 0;
       return;
@@ -209,11 +260,12 @@ final class CityMapController {
   }
 
   TouchResult onTouch(float x, float y, CityMapLayout layout) {
-    Expedition active = game.expeditionController.report();
+    Expedition active = panelExpedition();
     if (eventPanel) {
-      Expedition expedition = game.expeditionController.active();
+      Expedition expedition = panelExpedition();
       if (expedition == null || expedition.state() != Expedition.State.AWAITING_DECISION) {
         eventPanel = false;
+        expeditionId = "";
         return TouchResult.CONSUMED;
       }
       ExpeditionEvent event = expedition.explorationEvent;
@@ -224,39 +276,47 @@ final class CityMapController {
           message = game.expeditionController.continueEvent(event.instanceId);
           if (message.isEmpty()) {
             eventPanel = false;
+            expeditionId = "";
             panelScroll = 0;
           }
         } else {
           message = game.expeditionController.chooseEvent(event.instanceId, action);
           panelScroll = 0;
-          autoReportId = event.instanceId + event.effectsApplied;
+          shownReports.add(event.instanceId + event.effectsApplied);
         }
       } else if (y < layout.panelTop
           || y > layout.panelBottom
           || (x > 350 && y < layout.panelTop + 52)) {
         eventPanel = false;
+        expeditionId = "";
         panelScroll = 0;
       }
       return TouchResult.CONSUMED;
     }
     if (expeditionPanel) {
-      Expedition report = game.expeditionController.report();
+      Expedition report = panelExpedition();
       if (layout.hitsPreparation(x, y)) {
         if (report != null && report.state() == Expedition.State.AWAITING_RETURN) {
           message = game.expeditionController.returnHome(report.id);
           if (message.isEmpty()) {
             expeditionPanel = false;
+            expeditionId = "";
             panelScroll = 0;
           }
         } else if (report != null && report.state() == Expedition.State.COMPLETED) {
           game.expeditionController.acknowledge(report.id);
           expeditionPanel = false;
+          expeditionId = "";
           panelScroll = 0;
-        } else expeditionPanel = false;
+        } else {
+          expeditionPanel = false;
+          expeditionId = "";
+        }
       } else if (y < layout.panelTop
           || y > layout.panelBottom
           || (x > 350 && y < layout.panelTop + 52)) {
         expeditionPanel = false;
+        expeditionId = "";
         panelScroll = 0;
       }
       return TouchResult.CONSUMED;
@@ -270,10 +330,15 @@ final class CityMapController {
         return TouchResult.CONSUMED;
       }
       if (y >= prep.sendTop && y <= prep.sendTop + 40) {
-        message = game.expeditionController.start(preparation.id, selectedIds);
+        boolean recon = preparation.kind == MapLocation.Kind.DISTRICT;
+        message =
+            recon
+                ? game.explorationController.start(preparation.id, selectedIds)
+                : game.expeditionController.start(preparation.id, selectedIds);
         if (message.isEmpty()) {
           closeSelection();
-          displayProgress = 0;
+          if (recon) reconDisplayProgress = 0;
+          else displayProgress = 0;
         }
         return TouchResult.CONSUMED;
       }
@@ -307,25 +372,63 @@ final class CityMapController {
           || y > layout.panelBottom
           || (x >= 350f && y <= layout.panelTop + 52f)) {
         closeSelection();
+      } else if (selected.kind == MapLocation.Kind.DISTRICT
+          && x >= 34
+          && x <= 386
+          && y >= layout.panelBottom - 114
+          && y <= layout.panelBottom - 76) {
+        Expedition report = game.explorationController.latestReport(selected.id);
+        if (report != null) openExpedition(report);
       } else if (layout.hitsPreparation(x, y)) {
-        if (selected.isLocked()) closeSelection();
+        if (selected.kind == MapLocation.Kind.DISTRICT) {
+          CityDistrict d = game.explorationController.district(selected.id);
+          if (d.state == CityDistrict.State.EXPLORED) {
+            districtFilterId = d.config.id;
+            districtsLayer = false;
+            closeSelection();
+          } else prepare();
+        } else if (selected.isLocked()) closeSelection();
         else prepare();
       }
       return TouchResult.CONSUMED;
     }
-    if (y < layout.top || y > layout.bottom) return TouchResult.NONE;
-    if (active != null) {
-      MapLocation target = game.expeditionController.location(active.locationId);
-      float[] point = ExpeditionConfig.point(target, displayProgress);
-      if (layout.hits(x, y, point[0], point[1])
-          || (x >= 30 && x <= 390 && y >= layout.bottom - 53 && y <= layout.bottom - 25)) {
-        if (active.state() == Expedition.State.AWAITING_DECISION) eventPanel = true;
-        else expeditionPanel = true;
-        panelScroll = 0;
+    if (y >= 39 && y <= 69) {
+      if (x >= 20 && x <= 144) {
+        districtsLayer = false;
+        districtFilterId = "";
+        return TouchResult.CONSUMED;
+      }
+      if (x >= 152 && x <= 276) {
+        districtsLayer = true;
+        districtFilterId = "";
         return TouchResult.CONSUMED;
       }
     }
-    for (MapLocation location : locations) {
+    if (y < layout.top || y > layout.bottom) return TouchResult.NONE;
+    for (Expedition.Type type : Expedition.Type.values()) {
+      Expedition route = game.expeditionController.active(type);
+      if (route == null) continue;
+      MapLocation target = game.expeditionController.location(route.locationId);
+      float progress = type == Expedition.Type.RECON ? reconDisplayProgress : displayProgress;
+      float[] point = ExpeditionConfig.point(target, progress);
+      float row = layout.expeditionRow(type);
+      if (layout.hits(x, y, point[0], point[1])
+          || (x >= 30 && x <= 390 && y >= row && y <= row + 28)) {
+        openExpedition(route);
+        return TouchResult.CONSUMED;
+      }
+    }
+    // A completed report remains on its indicator until acknowledged.
+    if (active != null
+        && active.state() == Expedition.State.COMPLETED
+        && x >= 30
+        && x <= 390
+        && y >= layout.expeditionRow(active.type)
+        && y <= layout.expeditionRow(active.type) + 28) {
+      openExpedition(active);
+      return TouchResult.CONSUMED;
+    }
+    for (MapLocation location : visibleLocations()) {
       if (layout.hits(x, y, location.mapX, location.mapY)) {
         selected = location;
         panelScroll = 0;

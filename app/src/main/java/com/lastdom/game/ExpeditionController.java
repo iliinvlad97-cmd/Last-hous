@@ -24,7 +24,21 @@ final class ExpeditionController {
   }
 
   Expedition active() {
-    for (Expedition expedition : game.expeditions) if (expedition.active()) return expedition;
+    Expedition normal = active(Expedition.Type.LOOT);
+    return normal != null ? normal : active(Expedition.Type.RECON);
+  }
+
+  Expedition active(Expedition.Type type) {
+    for (Expedition e : game.expeditions) if (e.active() && e.type == type) return e;
+    return null;
+  }
+
+  long activeCount(Expedition.Type type) {
+    return game.expeditions.stream().filter(e -> e.active() && e.type == type).count();
+  }
+
+  Expedition find(String id) {
+    for (Expedition e : game.expeditions) if (e.id.equals(id)) return e;
     return null;
   }
 
@@ -44,12 +58,26 @@ final class ExpeditionController {
   }
 
   String start(String locationId, Collection<String> ids) {
+    return launch(locationId, ids, Expedition.Type.LOOT);
+  }
+
+  String startRecon(String locationId, Collection<String> ids) {
+    return launch(locationId, ids, Expedition.Type.RECON);
+  }
+
+  private String launch(String locationId, Collection<String> ids, Expedition.Type type) {
     MapLocation target = location(locationId);
-    if (target == null || target.isLocked()) return "Район не исследован";
-    if (target.depleted()) return "Локация истощена";
-    long count = game.expeditions.stream().filter(Expedition::active).count();
-    if (count >= ExpeditionConfig.MAX_ACTIVE || game.expeditionPerson >= 0)
-      return "Сначала завершите текущую экспедицию";
+    if (type == Expedition.Type.RECON) {
+      String reason = game.explorationController.unavailableReason(locationId);
+      if (!reason.isEmpty()) return reason;
+      if (target == null || target.kind != MapLocation.Kind.DISTRICT) return "Район не существует";
+    } else {
+      if (target == null || target.kind == MapLocation.Kind.DISTRICT || target.isLocked())
+        return "Район не исследован";
+      if (target.depleted()) return "Локация истощена";
+      if (activeCount(Expedition.Type.LOOT) >= ExpeditionConfig.maxActive(Expedition.Type.LOOT)
+          || game.expeditionPerson >= 0) return "Сначала завершите текущую экспедицию";
+    }
     if (ids == null || ids.isEmpty()) return "Выберите от 1 до 3 жителей";
     if (ids.size() > ExpeditionConfig.MAX_PARTICIPANTS || new HashSet<>(ids).size() != ids.size())
       return "Выберите от 1 до 3 разных жителей";
@@ -70,12 +98,20 @@ final class ExpeditionController {
             ExpeditionConfig.oneWayMinutes(target),
             0,
             Expedition.State.TRAVELING_TO_TARGET);
+    expedition.type = type;
+    if (type == Expedition.Type.RECON)
+      expedition.recon = game.explorationController.capture(expedition);
     game.expeditions.add(expedition);
     for (Resident resident : squad) {
       resident.job = "Экспедиция";
       resident.status = Resident.Status.ON_EXPEDITION;
     }
-    game.addLog("Отряд отправлен: " + target.name + " (" + squad.size() + " чел.).");
+    game.addLog(
+        (type == Expedition.Type.RECON ? "Разведка отправлена: " : "Отряд отправлен: ")
+            + target.name
+            + " ("
+            + squad.size()
+            + " чел.).");
     game.save();
     game.invalidate();
     return "";
@@ -104,6 +140,10 @@ final class ExpeditionController {
   }
 
   void beginExploration(Expedition expedition) {
+    if (expedition.type == Expedition.Type.RECON) {
+      game.explorationController.beginResearch(expedition);
+      return;
+    }
     expedition.beginPhase(
         Expedition.State.EXPLORING,
         ExpeditionConfig.explorationMinutes(location(expedition.locationId)),
@@ -125,7 +165,8 @@ final class ExpeditionController {
           && state != Expedition.State.RETURNING) continue;
       changed = true;
       boolean phaseFinished = expedition.advanceMinute();
-      if (state == Expedition.State.EXPLORING
+      if (expedition.type == Expedition.Type.LOOT
+          && state == Expedition.State.EXPLORING
           && !expedition.cityEventChecked
           && expedition.elapsedMinutes() >= Math.max(1, expedition.phaseDurationMinutes / 2)) {
         checkCityEvent(expedition);
@@ -133,8 +174,11 @@ final class ExpeditionController {
       }
       if (!phaseFinished) continue;
       if (state == Expedition.State.TRAVELING_TO_TARGET) beginExploration(expedition);
-      else if (state == Expedition.State.EXPLORING) finishExploration(expedition);
-      else complete(expedition);
+      else if (state == Expedition.State.EXPLORING) {
+        if (expedition.type == Expedition.Type.RECON)
+          game.explorationController.finishResearch(expedition);
+        else finishExploration(expedition);
+      } else complete(expedition);
     }
     return changed;
   }
@@ -243,7 +287,7 @@ final class ExpeditionController {
   }
 
   String chooseEvent(String eventId, int action) {
-    Expedition expedition = active();
+    Expedition expedition = active(Expedition.Type.LOOT);
     if (expedition == null || expedition.state() != Expedition.State.AWAITING_DECISION)
       return "Отряд не ждёт решения";
     ExpeditionEvent event = expedition.explorationEvent;
@@ -319,7 +363,7 @@ final class ExpeditionController {
   }
 
   String continueEvent(String eventId) {
-    Expedition expedition = active();
+    Expedition expedition = active(Expedition.Type.LOOT);
     if (expedition == null || expedition.state() != Expedition.State.AWAITING_DECISION)
       return "Отряд не ждёт решения";
     ExpeditionEvent event = expedition.explorationEvent;
@@ -342,7 +386,7 @@ final class ExpeditionController {
   }
 
   String returnHome(String id) {
-    Expedition expedition = active();
+    Expedition expedition = find(id);
     if (expedition == null
         || !expedition.id.equals(id)
         || expedition.state() != Expedition.State.AWAITING_RETURN
@@ -359,13 +403,20 @@ final class ExpeditionController {
     if (expedition.state() != Expedition.State.RETURNING
         || expedition.remainingMinutes() != 0
         || !expedition.resultGenerated) return;
-    game.food = safeAdd(game.food, expedition.cargo.get(ExpeditionLoot.Resource.FOOD));
-    game.water = safeAdd(game.water, expedition.cargo.get(ExpeditionLoot.Resource.WATER));
-    game.mats = safeAdd(game.mats, expedition.cargo.get(ExpeditionLoot.Resource.MATERIALS));
-    game.expeditionWarehouse.add(
-        ExpeditionLoot.Resource.MEDICINE, expedition.cargo.get(ExpeditionLoot.Resource.MEDICINE));
-    game.expeditionWarehouse.add(
-        ExpeditionLoot.Resource.EQUIPMENT, expedition.cargo.get(ExpeditionLoot.Resource.EQUIPMENT));
+    if (expedition.type == Expedition.Type.RECON) {
+      if (expedition.recon == null || !expedition.recon.resolved || !expedition.recon.injuryApplied)
+        return;
+      game.explorationController.applyReturn(expedition);
+    } else {
+      game.food = safeAdd(game.food, expedition.cargo.get(ExpeditionLoot.Resource.FOOD));
+      game.water = safeAdd(game.water, expedition.cargo.get(ExpeditionLoot.Resource.WATER));
+      game.mats = safeAdd(game.mats, expedition.cargo.get(ExpeditionLoot.Resource.MATERIALS));
+      game.expeditionWarehouse.add(
+          ExpeditionLoot.Resource.MEDICINE, expedition.cargo.get(ExpeditionLoot.Resource.MEDICINE));
+      game.expeditionWarehouse.add(
+          ExpeditionLoot.Resource.EQUIPMENT,
+          expedition.cargo.get(ExpeditionLoot.Resource.EQUIPMENT));
+    }
     for (String id : expedition.participantIds) {
       Resident resident = resident(id);
       if (resident == null) continue;
@@ -377,12 +428,13 @@ final class ExpeditionController {
     expedition.rewardCredited = true;
     expedition.completedMinute = now();
     expedition.restorePhase(Expedition.State.COMPLETED, 1, 1, now());
-    game.addLog(
-        "Отряд вернулся из "
-            + location(expedition.locationId).name
-            + ". Доставлено: "
-            + expedition.cargo.total()
-            + " ед.");
+    if (expedition.type == Expedition.Type.LOOT)
+      game.addLog(
+          "Отряд вернулся из "
+              + location(expedition.locationId).name
+              + ". Доставлено: "
+              + expedition.cargo.total()
+              + " ед.");
   }
 
   void acknowledge(String id) {

@@ -16,7 +16,8 @@ final class MapLocation {
     GARAGE,
     POLICE,
     WATER,
-    HOSPITAL
+    HOSPITAL,
+    DISTRICT
   }
 
   enum Distance {
@@ -34,7 +35,8 @@ final class MapLocation {
     LOW("Низкий", "НИЗКИЙ"),
     LOW_MEDIUM("Умеренный", "УМЕРЕННЫЙ"),
     MEDIUM("Средний", "СРЕДНИЙ"),
-    HIGH("Высокий", "ВЫСОКИЙ");
+    HIGH("Высокий", "ВЫСОКИЙ"),
+    VERY_HIGH("Очень высокий", "ОЧЕНЬ ВЫСОКИЙ");
     final String label, markerLabel;
 
     Risk(String label, String markerLabel) {
@@ -63,12 +65,38 @@ final class MapLocation {
       float mapX,
       float mapY,
       State state) {
+    this(
+        id,
+        name,
+        markerName,
+        loot,
+        kind,
+        distance,
+        risk,
+        mapX,
+        mapY,
+        state,
+        LootTable.forKind(kind));
+  }
+
+  MapLocation(
+      String id,
+      String name,
+      String markerName,
+      String loot,
+      Kind kind,
+      Distance distance,
+      Risk risk,
+      float mapX,
+      float mapY,
+      State state,
+      LootTable table) {
     this.id = id;
     this.name = name;
     this.markerName = markerName;
     this.loot = loot;
     this.kind = kind;
-    this.lootTable = LootTable.forKind(kind);
+    this.lootTable = table;
     this.distance = distance;
     this.risk = risk;
     this.mapX = mapX;

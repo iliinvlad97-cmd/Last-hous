@@ -8,33 +8,49 @@ import android.graphics.Path;
 final class ExpeditionRenderer {
   private final GameView view;
   private final Paint paint = new Paint(3);
-  private Expedition displayed;
-  private Expedition.State displayedState;
+  private final Expedition[] displayed = new Expedition[2];
+  private final Expedition.State[] displayedState = new Expedition.State[2];
 
   ExpeditionRenderer(GameView view) {
     this.view = view;
   }
 
   void drawRoute(Canvas c, CityMapLayout layout) {
-    Expedition expedition = view.game.expeditionController.report();
-    if (expedition == null) {
-      displayed = null;
-      return;
+    boolean any = false;
+    for (Expedition.Type type : Expedition.Type.values()) {
+      Expedition e = view.game.expeditionController.active(type);
+      if (e != null) {
+        drawRoute(c, layout, e);
+        any = true;
+      } else displayed[type.ordinal()] = null;
     }
+    if (!any) {
+      Expedition report = view.game.expeditionController.report();
+      if (report != null) drawRoute(c, layout, report);
+    }
+  }
+
+  private void drawRoute(Canvas c, CityMapLayout layout, Expedition expedition) {
+    int index = expedition.type.ordinal();
+    boolean recon = expedition.type == Expedition.Type.RECON;
+    int color = recon ? view.blue : view.accent;
+    float row = layout.expeditionRow(expedition.type);
     MapLocation target = view.game.expeditionController.location(expedition.locationId);
-    if (displayed != expedition || displayedState != expedition.state()) {
-      displayed = expedition;
-      displayedState = expedition.state();
-      view.cityMap.displayProgress = expedition.routeProgress();
+    if (displayed[index] != expedition || displayedState[index] != expedition.state()) {
+      displayed[index] = expedition;
+      displayedState[index] = expedition.state();
+      if (recon) view.cityMap.reconDisplayProgress = expedition.routeProgress();
+      else view.cityMap.displayProgress = expedition.routeProgress();
     }
-    float progress = view.cityMap.displayProgress;
+    float progress = recon ? view.cityMap.reconDisplayProgress : view.cityMap.displayProgress;
     if (!view.game.paused && !view.game.event && !view.game.gameOver) {
       progress += (expedition.routeProgress() - progress) * .2f;
       if (Math.abs(progress - expedition.routeProgress()) < .0001f)
         progress = expedition.routeProgress();
       else view.postInvalidateOnAnimation();
     }
-    view.cityMap.displayProgress = progress;
+    if (recon) view.cityMap.reconDisplayProgress = progress;
+    else view.cityMap.displayProgress = progress;
     float[][] points = ExpeditionConfig.route(target);
     Path path = new Path();
     path.moveTo(view.sy(layout.x(points[0][0])), view.sy(layout.y(points[0][1])));
@@ -42,36 +58,42 @@ final class ExpeditionRenderer {
       path.lineTo(view.sy(layout.x(points[i][0])), view.sy(layout.y(points[i][1])));
     paint.setStyle(Paint.Style.STROKE);
     paint.setStrokeWidth(view.sy(2));
-    paint.setColor(view.accent);
+    paint.setColor(color);
     c.drawPath(path, paint);
     paint.setStyle(Paint.Style.FILL);
     float[] point = ExpeditionConfig.point(target, progress);
     float x = layout.x(point[0]), y = layout.y(point[1]);
     paint.setColor(view.bg);
     c.drawCircle(view.sy(x), view.sy(y), view.sy(14), paint);
-    paint.setColor(view.accent);
+    paint.setColor(color);
     c.drawCircle(view.sy(x), view.sy(y), view.sy(10), paint);
-    view.bold(c, "О", x - 4, y + 4, 11, view.bg);
-    view.box(c, 30, layout.bottom - 53, 390, layout.bottom - 25, view.panel2, 8);
+    view.bold(c, recon ? "Р" : "О", x - 4, y + 4, 11, view.bg);
+    view.box(c, 30, row, 390, row + 28, view.panel2, 8);
     view.txt(
         c,
-        (expedition.state() == Expedition.State.EXPLORING
-                ? "Отряд прибыл • Исследование"
-                : expedition.phaseLabel())
+        (recon
+                ? "Разведка • " + expedition.phaseLabel()
+                : expedition.state() == Expedition.State.EXPLORING
+                    ? "Отряд прибыл • Исследование"
+                    : expedition.phaseLabel())
             + " • "
             + Math.round(expedition.progress() * 100)
             + "% • "
             + expedition.remainingMinutes()
             + " мин.",
         42,
-        layout.bottom - 35,
+        row + 18,
         10,
-        view.accent);
+        color);
   }
 
   void drawPanel(Canvas c, CityMapLayout layout) {
-    Expedition expedition = view.game.expeditionController.report();
+    Expedition expedition = view.cityMap.panelExpedition();
     if (!view.cityMap.expeditionPanel || expedition == null) return;
+    if (expedition.type == Expedition.Type.RECON) {
+      view.reconReportRenderer.draw(c, layout, expedition);
+      return;
+    }
     MapLocation target = view.game.expeditionController.location(expedition.locationId);
     view.box(c, 0, 0, 420, view.H / view.scale, android.graphics.Color.argb(180, 8, 13, 18), 0);
     view.box(c, 18, layout.panelTop, 402, layout.panelBottom, view.panel, 16);

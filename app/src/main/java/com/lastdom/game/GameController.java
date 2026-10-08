@@ -9,6 +9,7 @@ import java.util.Locale;
 class GameController extends GameState {
 
   final ExpeditionController expeditionController = new ExpeditionController(this);
+  final ExplorationController explorationController = new ExplorationController(this);
   final RoomUpgradeController roomUpgradeController = new RoomUpgradeController(this);
   final RoomAssignmentController roomAssignmentController = new RoomAssignmentController(this);
   final SurvivalController survivalController = new SurvivalController(this);
@@ -70,11 +71,9 @@ class GameController extends GameState {
     raidController.reset();
     for (MapLocation location : cityLocations) {
       location.setDepletion(0);
-      location.setState(
-          location.kind == MapLocation.Kind.WATER || location.kind == MapLocation.Kind.HOSPITAL
-              ? MapLocation.State.LOCKED
-              : MapLocation.State.AVAILABLE);
+      location.setState(ExplorationConfig.initialLocationState(location));
     }
+    explorationController.reset();
     for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
       expeditionWarehouse.set(resource, 0);
     day = 1;

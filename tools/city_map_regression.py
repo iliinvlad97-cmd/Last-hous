@@ -39,7 +39,7 @@ public class RegressionProbe {
     tap(v,m.x(p.mapX),m.y(p.mapY));require(v.cityMap.selected()==p,"all marker centers selectable");
     Canvas panel=draw(v);
     if(p.isLocked()){
-     locked++;text(panel,"РАЙОН НЕ ИССЛЕДОВАН");text(panel,"Исследуйте ближайшие районы,");text(panel,"открыть путь.");
+     locked++;text(panel,"РАЙОН НЕ ИССЛЕДОВАН");text(panel,"Сначала исследуйте:");text(panel,ExplorationConfig.owner(p.id).name);
      tap(v,210,m.panelBottom-40);require(v.cityMap.selected()==null,"locked panel closes");
     }else{
      available++;text(panel,p.name.toUpperCase(Locale.ROOT));text(panel,p.loot);text(panel,p.distance.label);text(panel,p.risk.label);text(panel,"Не исследовано");

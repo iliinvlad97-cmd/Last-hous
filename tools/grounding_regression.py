@@ -204,6 +204,9 @@ def main():
         # Stage 8 adds only its own saved counters/carries here; precise migration and
         # input/output invariants are exercised by production_regression.py.
         gameplay_probe = gameplay_probe.replace('k.equals("power")||', 'k.startsWith("room_eff8_")||k.startsWith("production8_")||k.equals("power")||')
+        # Stage 9 adds district discovery only; compare every pre-existing save field.
+        # exploration_regression.py separately checks the new fields and legacy migration.
+        gameplay_probe = gameplay_probe.replace('k.equals("power")||', 'k.startsWith("exploration9_")||k.startsWith("district9_")||k.equals("power")||')
         fixtures.PROBE = gameplay_probe
         baseline = subprocess.check_output(["git", "show", f"{fixtures.BASELINE}:{fixtures.JAVA_PATH}/MainActivity.java"], cwd=root, text=True)
         original = {"com/lastdom/game/MainActivity.java": baseline, "com/lastdom/game/R.java": current["com/lastdom/game/R.java"]}

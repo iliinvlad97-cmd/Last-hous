@@ -23,6 +23,8 @@ final class LootTable {
   static LootTable forKind(MapLocation.Kind kind) {
     LootTable table = new LootTable();
     switch (kind) {
+      case DISTRICT:
+        return table;
       case STORE:
         return table
             .range(ExpeditionLoot.Resource.FOOD, 8, 20)

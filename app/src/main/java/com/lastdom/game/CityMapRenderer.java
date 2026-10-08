@@ -41,8 +41,13 @@ final class CityMapRenderer {
     drawDistrict(canvas, layout);
     drawFog(canvas, layout);
     drawShelter(canvas, layout);
-    for (MapLocation location : view.cityMap.locations) drawMarker(canvas, location, layout);
+    for (MapLocation location : view.cityMap.visibleLocations()) {
+      if (location.kind == MapLocation.Kind.DISTRICT)
+        view.districtRenderer.marker(canvas, location, layout);
+      else drawMarker(canvas, location, layout);
+    }
     view.expeditionRenderer.drawRoute(canvas, layout);
+    drawLayerControls(canvas);
     text(canvas, "С", 378, layout.top + 23, 9, MUTED, true);
     line(canvas, 381, layout.top + 30, 381, layout.top + 49, 1, MUTED);
     line(canvas, 381, layout.top + 30, 377, layout.top + 36, 1, MUTED);
@@ -54,9 +59,25 @@ final class CityMapRenderer {
     view.expeditionRenderer.drawPanel(canvas, layout);
   }
 
+  private void drawLayerControls(Canvas canvas) {
+    rounded(canvas, 20, 39, 144, 69, view.cityMap.districtsLayer ? view.panel2 : view.accent, 8);
+    text(canvas, "СТАРЫЕ ТОЧКИ", 30, 59, 10, view.cityMap.districtsLayer ? INK : view.bg, true);
+    rounded(canvas, 152, 39, 276, 69, view.cityMap.districtsLayer ? view.accent : view.panel2, 8);
+    text(canvas, "РАЙОНЫ", 177, 59, 10, view.cityMap.districtsLayer ? view.bg : INK, true);
+  }
+
   private void drawHeader(Canvas canvas) {
-    text(canvas, "КАРТА ГОРОДА", 20, 29, 18, INK, true);
-    text(canvas, GameView.VERSION_LABEL, 20, 49, 9, MUTED, false);
+    text(
+        canvas,
+        view.cityMap.districtFilterId.isEmpty()
+            ? "КАРТА ГОРОДА"
+            : view.cityMap.layerName().toUpperCase(Locale.ROOT),
+        20,
+        22,
+        14,
+        INK,
+        true);
+    text(canvas, GameView.VERSION_LABEL, 20, 34, 8, MUTED, false);
     rounded(canvas, 284, 12, 400, 53, Color.rgb(28, 40, 51), 9);
     text(canvas, "Д" + view.game.day + "  " + view.game.clock(), 296, 30, 11, INK, true);
     text(canvas, view.game.phase(), 296, 46, 8, WARM, false);
@@ -244,6 +265,10 @@ final class CityMapRenderer {
 
   private void drawSelection(Canvas c, CityMapLayout m) {
     MapLocation location = view.cityMap.selected();
+    if (location.kind == MapLocation.Kind.DISTRICT) {
+      view.districtRenderer.panel(c, location, m);
+      return;
+    }
     fill(c, Color.argb(155, 4, 10, 17));
     c.drawRect(0, 0, view.W, view.H, paint);
     rounded(c, 18, m.panelTop, 402, m.panelBottom, Color.rgb(24, 35, 46), 17);
@@ -253,7 +278,12 @@ final class CityMapRenderer {
       text(c, "РАЙОН НЕ ИССЛЕДОВАН", 34, m.panelTop + 35, 15, INK, true);
       text(c, location.name, 34, m.panelTop + 65, 14, MUTED, true);
       java.util.List<String> lines = locationLines(location);
-      lines.add(0, "Исследуйте ближайшие районы, чтобы открыть путь.");
+      ExplorationConfig.District owner = ExplorationConfig.owner(location.id);
+      lines.add(
+          0,
+          owner == null
+              ? "Исследуйте ближайшие районы, чтобы открыть путь."
+              : "Сначала исследуйте: " + owner.name);
       MapPanelContent.draw(view, c, m, lines);
       rounded(c, 34, m.panelBottom - 66, 386, m.panelBottom - 24, Color.rgb(44, 59, 72), 10);
       centered(c, "ЗАКРЫТЬ", 210, m.panelBottom - 40, 11, INK, true);
@@ -321,6 +351,7 @@ final class CityMapRenderer {
       case LOW_MEDIUM:
         return Color.rgb(192, 181, 111);
       case HIGH:
+      case VERY_HIGH:
         return Color.rgb(222, 113, 96);
       default:
         return WARM;

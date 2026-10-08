@@ -13,6 +13,7 @@ class GameState {
   ArrayList<String> log = new ArrayList<>();
   ArrayList<Location> locations = new ArrayList<>();
   final java.util.List<MapLocation> cityLocations = CityMapController.defaultLocations();
+  final java.util.List<CityDistrict> cityDistricts = ExplorationConfig.initialDistricts();
   final ArrayList<Expedition> expeditions = new ArrayList<>();
   final ExpeditionLoot expeditionWarehouse = new ExpeditionLoot();
   final ArrayList<RoomUpgradeTask> roomUpgrades = new ArrayList<>();
