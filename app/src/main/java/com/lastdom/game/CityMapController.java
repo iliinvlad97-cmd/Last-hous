@@ -100,6 +100,59 @@ final class CityMapController {
   int page;
   boolean expeditionPanel;
   float displayProgress;
+  int panelScroll, panelLineCount;
+  private float dragY, dragStartY;
+  private boolean dragging, moved;
+  private String autoReportId = "";
+
+  void openPendingReport() {
+    Expedition expedition = game.expeditionController.report();
+    if (expedition == null) return;
+    if (expedition.state() != Expedition.State.AWAITING_RETURN
+        && expedition.state() != Expedition.State.COMPLETED) return;
+    String key = expedition.id + expedition.state();
+    if (key.equals(autoReportId)) return;
+    autoReportId = key;
+    closeSelection();
+    expeditionPanel = true;
+  }
+
+  boolean scrollTouch(int action, float y, CityMapLayout layout) {
+    boolean panel = expeditionPanel || selected != null;
+    if (!panel) return false;
+    if (action == android.view.MotionEvent.ACTION_DOWN) {
+      dragging = y >= layout.panelTop + 75 && y <= layout.panelBottom - 84;
+      dragY = dragStartY = y;
+      moved = false;
+      return true;
+    }
+    if (action == android.view.MotionEvent.ACTION_MOVE && dragging) {
+      if (Math.abs(y - dragStartY) > 8) moved = true;
+      int delta = (int) ((dragY - y) / MapPanelContent.LINE_HEIGHT);
+      if (delta != 0) {
+        panelScroll =
+            Math.max(
+                0,
+                Math.min(
+                    Math.max(0, panelLineCount - MapPanelContent.visibleLines(layout)),
+                    panelScroll + delta));
+        dragY = y;
+      }
+      return true;
+    }
+    if (action == android.view.MotionEvent.ACTION_CANCEL) {
+      dragging = false;
+      moved = false;
+      return true;
+    }
+    if (action == android.view.MotionEvent.ACTION_UP) {
+      dragging = false;
+      boolean consumed = moved;
+      moved = false;
+      return consumed;
+    }
+    return false;
+  }
 
   MapLocation selected() {
     return selected;
@@ -116,12 +169,20 @@ final class CityMapController {
     message = "";
     page = 0;
     expeditionPanel = false;
+    panelScroll = 0;
+    panelLineCount = 0;
   }
 
   private void prepare() {
     if (selected == null || selected.isLocked()) return;
+    if (selected.depleted()) {
+      message = "Локация истощена";
+      panelScroll = 0;
+      return;
+    }
     if (game.expeditionController.active() != null || game.expeditionPerson >= 0) {
       message = "Сначала завершите текущую экспедицию";
+      panelScroll = 0;
       return;
     }
     preparation = selected;
@@ -132,12 +193,27 @@ final class CityMapController {
   }
 
   TouchResult onTouch(float x, float y, CityMapLayout layout) {
-    Expedition active = game.expeditionController.active();
+    Expedition active = game.expeditionController.report();
     if (expeditionPanel) {
-      if (y < layout.panelTop
+      Expedition report = game.expeditionController.report();
+      if (layout.hitsPreparation(x, y)) {
+        if (report != null && report.state() == Expedition.State.AWAITING_RETURN) {
+          message = game.expeditionController.returnHome(report.id);
+          if (message.isEmpty()) {
+            expeditionPanel = false;
+            panelScroll = 0;
+          }
+        } else if (report != null && report.state() == Expedition.State.COMPLETED) {
+          game.expeditionController.acknowledge(report.id);
+          expeditionPanel = false;
+          panelScroll = 0;
+        } else expeditionPanel = false;
+      } else if (y < layout.panelTop
           || y > layout.panelBottom
-          || (x > 350 && y < layout.panelTop + 52)
-          || layout.hitsPreparation(x, y)) expeditionPanel = false;
+          || (x > 350 && y < layout.panelTop + 52)) {
+        expeditionPanel = false;
+        panelScroll = 0;
+      }
       return TouchResult.CONSUMED;
     }
     if (preparation != null) {
@@ -199,12 +275,14 @@ final class CityMapController {
       if (layout.hits(x, y, point[0], point[1])
           || (x >= 30 && x <= 390 && y >= layout.bottom - 53 && y <= layout.bottom - 25)) {
         expeditionPanel = true;
+        panelScroll = 0;
         return TouchResult.CONSUMED;
       }
     }
     for (MapLocation location : locations) {
       if (layout.hits(x, y, location.mapX, location.mapY)) {
         selected = location;
+        panelScroll = 0;
         message = "";
         return TouchResult.CONSUMED;
       }

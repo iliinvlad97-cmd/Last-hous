@@ -8,7 +8,7 @@ final class CityMapLayout {
 
   CityMapLayout(float logicalHeight) {
     bottom = Math.max(top + 180f, logicalHeight - 80f);
-    panelTop = Math.max(top + 8f, logicalHeight - 400f);
+    panelTop = Math.max(top, logicalHeight - 650f);
     panelBottom = logicalHeight - 86f;
   }
 

@@ -20,7 +20,7 @@ STUBS = {
 package android.content;
 public interface SharedPreferences {
  boolean contains(String k); int getInt(String k,int d); boolean getBoolean(String k,boolean d); String getString(String k,String d); Editor edit();
- interface Editor {Editor putInt(String k,int v); Editor putBoolean(String k,boolean v); Editor putString(String k,String v); void apply();}
+ interface Editor {Editor putInt(String k,int v); Editor putBoolean(String k,boolean v); Editor putString(String k,String v); void apply(); boolean commit();}
 }
 ''',
     "android/content/MemoryPreferences.java": r'''
@@ -28,6 +28,7 @@ package android.content;
 import java.util.*;
 public class MemoryPreferences implements SharedPreferences {
  public final TreeMap<String,Object> values=new TreeMap<>();
+ public int commits;
  public boolean contains(String k){return values.containsKey(k);}
  public int getInt(String k,int d){return (Integer)values.getOrDefault(k,d);}
  public boolean getBoolean(String k,boolean d){return (Boolean)values.getOrDefault(k,d);}
@@ -38,6 +39,7 @@ public class MemoryPreferences implements SharedPreferences {
   public Editor putBoolean(String k,boolean v){pending.put(k,v);return this;}
   public Editor putString(String k,String v){pending.put(k,v);return this;}
   public void apply(){values.putAll(pending);}
+  public boolean commit(){apply();commits++;return true;}
  };}
 }
 ''',
@@ -85,7 +87,7 @@ public class View {
     "android/view/MotionEvent.java": r'''
 package android.view;
 public class MotionEvent {
- public static final int ACTION_UP=1,ACTION_DOWN=0;
+ public static final int ACTION_UP=1,ACTION_DOWN=0,ACTION_MOVE=2,ACTION_CANCEL=3;
  private final float x,y; private final int action;
  public MotionEvent(float x,float y,int action){this.x=x;this.y=y;this.action=action;}
  public int getAction(){return action;} public float getX(){return x;} public float getY(){return y;}

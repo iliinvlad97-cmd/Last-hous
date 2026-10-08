@@ -188,7 +188,8 @@ final class CityMapRenderer {
     for (int i = 0; i < lines.length; i++)
       centered(c, lines[i], x, y - 31 - (lines.length - 1 - i) * 10, 8, locked ? MUTED : INK, true);
     int risk = riskColor(location);
-    String badge = locked ? "ЗАКРЫТО" : location.risk.markerLabel;
+    String badge =
+        locked ? "ЗАКРЫТО" : location.depleted() ? "ИСТОЩЕНА" : location.risk.markerLabel;
     rounded(c, x - 38, y + 26, x + 38, y + 42, Color.argb(215, 16, 26, 34), 5);
     centered(c, badge, x, y + 37, 7, locked ? MUTED : risk, true);
   }
@@ -249,43 +250,68 @@ final class CityMapRenderer {
     line(c, 35, m.panelTop + 2, 135, m.panelTop + 2, 2, WARM);
     text(c, "×", 372, m.panelTop + 31, 24, MUTED, true);
     if (location.isLocked()) {
-      text(c, "РАЙОН НЕ ИССЛЕДОВАН", 34, m.panelTop + 58, 15, INK, true);
-      wrap(c, location.name, 34, m.panelTop + 91, 375, 12, MUTED, 17);
-      wrap(
-          c,
-          "Исследуйте ближайшие районы, чтобы открыть путь.",
-          34,
-          m.panelTop + 145,
-          375,
-          12,
-          MUTED,
-          19);
+      text(c, "РАЙОН НЕ ИССЛЕДОВАН", 34, m.panelTop + 35, 15, INK, true);
+      text(c, location.name, 34, m.panelTop + 65, 14, MUTED, true);
+      java.util.List<String> lines = locationLines(location);
+      lines.add(0, "Исследуйте ближайшие районы, чтобы открыть путь.");
+      MapPanelContent.draw(view, c, m, lines);
       rounded(c, 34, m.panelBottom - 66, 386, m.panelBottom - 24, Color.rgb(44, 59, 72), 10);
       centered(c, "ЗАКРЫТЬ", 210, m.panelBottom - 40, 11, INK, true);
     } else {
       text(c, location.name.toUpperCase(Locale.ROOT), 34, m.panelTop + 42, 15, INK, true);
-      row(c, "Добыча", location.loot, m.panelTop + 83, INK);
-      row(c, "Расстояние", location.distance.label, m.panelTop + 114, INK);
-      row(c, "Риск", location.risk.label, m.panelTop + 145, riskColor(location));
-      row(c, "Статус", location.statusLabel(), m.panelTop + 176, MUTED);
-      text(c, "Путь туда / обратно", 34, m.panelTop + 203, 10, MUTED, false);
-      text(
+      java.util.List<String> lines = locationLines(location);
+      if (!view.cityMap.message.isEmpty()) lines.add(0, view.cityMap.message);
+      MapPanelContent.draw(view, c, m, lines);
+      rounded(
           c,
-          ExpeditionConfig.oneWayMinutes(location)
-              + " / "
-              + ExpeditionConfig.oneWayMinutes(location)
-              + " мин.",
-          194,
-          m.panelTop + 203,
-          11,
-          INK,
-          true);
-      if (!view.cityMap.message.isEmpty())
-        wrap(c, view.cityMap.message, 34, m.panelTop + 226, 386, 10, WARM, 12);
-      rounded(c, 34, m.panelBottom - 66, 386, m.panelBottom - 24, WARM, 10);
+          34,
+          m.panelBottom - 66,
+          386,
+          m.panelBottom - 24,
+          location.depleted() ? Color.rgb(44, 59, 72) : WARM,
+          10);
       centered(
-          c, "ПОДГОТОВИТЬ ЭКСПЕДИЦИЮ", 210, m.panelBottom - 40, 11, Color.rgb(27, 32, 36), true);
+          c,
+          location.depleted() ? "ИСТОЩЕНА" : "ПОДГОТОВИТЬ ЭКСПЕДИЦИЮ",
+          210,
+          m.panelBottom - 40,
+          11,
+          location.depleted() ? MUTED : Color.rgb(27, 32, 36),
+          true);
     }
+  }
+
+  private java.util.List<String> locationLines(MapLocation location) {
+    java.util.List<String> lines = new java.util.ArrayList<>();
+    lines.add("Добыча: " + location.loot);
+    lines.add("Расстояние: " + location.distance.label);
+    lines.add("Риск: " + location.risk.label);
+    lines.add("Статус: " + location.statusLabel());
+    lines.add("Истощение: " + location.depletion() + "%");
+    lines.add(
+        "Путь туда / обратно: "
+            + ExpeditionConfig.oneWayMinutes(location)
+            + " / "
+            + ExpeditionConfig.oneWayMinutes(location)
+            + " мин.");
+    lines.add("Исследование: " + ExpeditionConfig.explorationMinutes(location) + " мин.");
+    lines.add("ВОЗМОЖНАЯ ДОБЫЧА");
+    for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
+      if (location.lootTable.max(resource) > 0)
+        lines.add(
+            resource.label
+                + ": "
+                + location.lootTable.min(resource)
+                + "–"
+                + location.lootTable.max(resource));
+    lines.add("Базовые диапазоны без бонусов и истощения.");
+    lines.add(
+        "СКЛАД ЭКСПЕДИЦИЙ: медикаменты "
+            + view.game.expeditionWarehouse.get(ExpeditionLoot.Resource.MEDICINE)
+            + ", снаряжение "
+            + view.game.expeditionWarehouse.get(ExpeditionLoot.Resource.EQUIPMENT));
+
+    return lines;
   }
 
   private int riskColor(MapLocation location) {

@@ -30,7 +30,7 @@ final class OverlayRenderer {
         c,
         "Сейчас: "
             + (view.game.isOnExpedition(s)
-                ? "В экспедиции"
+                ? "В экспедиции — " + view.game.expeditionController.memberLocation(s)
                 : view.residentRenderer.residentState(s, view.game.selected)),
         34,
         top + 91,
@@ -118,7 +118,7 @@ final class OverlayRenderer {
           s.role
               + " • "
               + (view.game.isOnExpedition(s)
-                  ? "В экспедиции"
+                  ? "В экспедиции — " + view.game.expeditionController.memberLocation(s)
                   : view.residentRenderer.residentState(s, i)),
           76,
           y + 41,

@@ -112,14 +112,14 @@ public class RegressionProbe {
    for(int i=0;i<3;i++)require(restored.game.homeRoomFor(restored.game.people.get(i))==-1,"restored participants absent from rooms");
    save(restored);require(saved.equals(Context.preferences.values),"save/load exact roundtrip");
    restored.game.load();require(restored.game.expeditions.size()==1&&restored.game.people.size()==5,"repeated load has no duplication");
-   while(copy.state()!=Expedition.State.AT_LOCATION){restored.game.advanceMinute();copy=restored.game.expeditionController.active();}
-   require(copy.remainingMinutes()==0&&copy.progress()==1,"arrival clamps progress");
+   while(copy.state()==Expedition.State.TRAVELING_TO_TARGET){restored.game.advanceMinute();copy=restored.game.expeditionController.active();}
+   require(copy.state()==Expedition.State.EXPLORING&&copy.remainingMinutes()==30&&copy.routeProgress()==1,"arrival starts exploration");
    for(int i=0;i<60;i++)restored.game.advanceMinute();
-   require(copy.state()==Expedition.State.AT_LOCATION&&copy.elapsedMinutes()==45,"arrival never auto returns or rewards");
-   require(restored.game.food==food&&restored.game.water==water&&restored.game.mats==mats&&restored.game.power==power,"no expedition reward/cost");
-   nav(restored,2);draw(restored);tap(restored,180,m.bottom-39);text(draw(restored),"Отряд прибыл.");
-   save(restored);GameView arrived=loaded();require(arrived.game.expeditionController.active().state()==Expedition.State.AT_LOCATION,"arrival survives restart");
-   require(!arrived.game.expeditionController.start("shop",ids(arrived,3)).isEmpty(),"arrival still occupies active slot");
+   require(copy.state()==Expedition.State.AWAITING_RETURN&&copy.resultGenerated,"research result waits for manual return");
+   require(restored.game.food==food&&restored.game.water==water&&restored.game.mats==mats&&restored.game.power==power,"no reward before return");
+   nav(restored,2);text(draw(restored),"ЭКСПЕДИЦИЯ — РЕЗУЛЬТАТЫ");
+   save(restored);GameView arrived=loaded();require(arrived.game.expeditionController.active().state()==Expedition.State.AWAITING_RETURN,"result survives restart");
+   require(!arrived.game.expeditionController.start("shop",ids(arrived,3)).isEmpty(),"waiting squad still occupies active slot");
   }
   GameView v=fresh(420,840);
   fail(v,"hospital",ids(v,0),"locked");fail(v,"missing",ids(v,0),"unknown target");
@@ -153,7 +153,7 @@ public class RegressionProbe {
   Context.preferences=new MemoryPreferences();Context.preferences.edit().putInt("day",3).putInt("count",1).putString("p0_job","Экспедиция").putInt("expPerson",0).putInt("expLoc",1).putInt("expRemain",12).apply();
   v=loaded();Expedition migrated=v.game.expeditionController.active();require(migrated!=null&&migrated.locationId.equals("pharmacy")&&migrated.remainingMinutes()==12,"old active expedition migrates");
   require(v.game.expeditionPerson==-1&&v.game.homeRoomFor(v.game.people.get(0))==-1,"legacy no duplicate timer/room");
-  int mats=v.game.mats;for(int i=0;i<13;i++)v.game.advanceMinute();require(migrated.state()==Expedition.State.AT_LOCATION&&v.game.mats==mats,"legacy migration no old rewards");
+  int mats=v.game.mats;for(int i=0;i<13;i++)v.game.advanceMinute();require(migrated.state()==Expedition.State.EXPLORING&&v.game.mats==mats,"legacy migration no old rewards");
   save(v);v=loaded();require(v.game.expeditions.size()==1,"migration happens once");
   Context.preferences.values.put("exp2_0_state","bad state");v=loaded();require(v.game.expeditions.isEmpty()&&v.game.homeRoomFor(v.game.people.get(0))==-1,"bad record fails safely without returning/duplicating resident");
   System.out.println("PASS: "+checks+" expedition assertions; atomic launch, selection/paging, clock/pause/speeds, normalized route, AI exclusion, arrival, restart, legacy migration and invalid save.");

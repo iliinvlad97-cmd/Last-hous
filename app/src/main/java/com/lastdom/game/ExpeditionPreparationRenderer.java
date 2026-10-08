@@ -28,7 +28,17 @@ final class ExpeditionPreparationRenderer {
         177,
         11,
         view.text);
-    view.txt(c, "Возвращение будет доступно на следующем этапе", 30, 194, 9, view.muted);
+    view.txt(
+        c,
+        "Исследование: "
+            + ExpeditionConfig.explorationMinutes(target)
+            + " мин. • Груз: "
+            + (ui.selectedIds.size() * 10)
+            + " ед.",
+        30,
+        194,
+        9,
+        view.muted);
     int pages = Math.max(1, (view.game.people.size() + layout.capacity - 1) / layout.capacity);
     int page = Math.max(0, Math.min(ui.page, pages - 1));
     for (int row = 0; row < layout.capacity; row++) {

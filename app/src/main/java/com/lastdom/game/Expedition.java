@@ -9,7 +9,9 @@ final class Expedition {
   enum State {
     PREPARING,
     TRAVELING_TO_TARGET,
-    AT_LOCATION,
+    AT_LOCATION, // Legacy Stage 2 save value; migrated to EXPLORING on load.
+    EXPLORING,
+    AWAITING_RETURN,
     RETURNING,
     COMPLETED,
     FAILED
@@ -21,6 +23,15 @@ final class Expedition {
   final int durationMinutes;
   private int elapsedMinutes;
   private State state;
+  String id = java.util.UUID.randomUUID().toString();
+  long phaseStartMinute;
+  int phaseDurationMinutes;
+  long completedMinute;
+  boolean resultGenerated, rewardCredited, reportAcknowledged;
+  ExpeditionLoot found = new ExpeditionLoot(), cargo = new ExpeditionLoot();
+  ExpeditionEvent explorationEvent =
+      new ExpeditionEvent(ExpeditionEvent.Type.QUIET, "Исследование прошло спокойно", "", 0);
+  int fatigueGain;
 
   Expedition(
       String locationId,
@@ -35,6 +46,8 @@ final class Expedition {
     durationMinutes = duration;
     elapsedMinutes = Math.max(0, Math.min(duration, elapsed));
     this.state = state;
+    phaseStartMinute = departureMinute;
+    phaseDurationMinutes = duration;
   }
 
   State state() {
@@ -46,24 +59,60 @@ final class Expedition {
   }
 
   int remainingMinutes() {
-    return Math.max(0, durationMinutes - elapsedMinutes);
+    return Math.max(0, phaseDurationMinutes - elapsedMinutes);
   }
 
   float progress() {
-    return Math.min(1, elapsedMinutes / (float) durationMinutes);
+    return Math.min(1, elapsedMinutes / (float) phaseDurationMinutes);
   }
 
   boolean active() {
     return state != State.COMPLETED && state != State.FAILED;
   }
 
-  boolean advanceMinute() {
-    if (state != State.TRAVELING_TO_TARGET) return false;
-    elapsedMinutes = Math.min(durationMinutes, elapsedMinutes + 1);
-    if (elapsedMinutes == durationMinutes) {
-      state = State.AT_LOCATION;
-      return true;
+  int capacity() {
+    return participantIds.size() * 10;
+  }
+
+  float routeProgress() {
+    if (state == State.RETURNING) return 1 - progress();
+    if (state == State.COMPLETED) return 0;
+    return state == State.TRAVELING_TO_TARGET ? progress() : 1;
+  }
+
+  String phaseLabel() {
+    switch (state) {
+      case EXPLORING:
+        return "Исследование";
+      case AWAITING_RETURN:
+        return "Ожидает возвращения";
+      case RETURNING:
+        return "Возвращается";
+      case COMPLETED:
+        return "Отряд вернулся";
+      default:
+        return "В пути";
     }
-    return false;
+  }
+
+  void beginPhase(State state, int duration, long now) {
+    this.state = state;
+    phaseDurationMinutes = Math.max(1, duration);
+    elapsedMinutes = 0;
+    phaseStartMinute = now;
+  }
+
+  void restorePhase(State state, int duration, int elapsed, long started) {
+    this.state = state;
+    phaseDurationMinutes = Math.max(1, duration);
+    elapsedMinutes = Math.max(0, Math.min(phaseDurationMinutes, elapsed));
+    phaseStartMinute = started;
+  }
+
+  boolean advanceMinute() {
+    if (state != State.TRAVELING_TO_TARGET && state != State.EXPLORING && state != State.RETURNING)
+      return false;
+    elapsedMinutes = Math.min(phaseDurationMinutes, elapsedMinutes + 1);
+    return elapsedMinutes == phaseDurationMinutes;
   }
 }

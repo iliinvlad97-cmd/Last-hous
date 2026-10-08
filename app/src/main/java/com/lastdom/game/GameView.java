@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v0.9.6 • EXPEDITIONS • STAGE 2";
+  static final String VERSION_LABEL = "v0.9.6 • EXPEDITIONS • STAGE 3";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -28,6 +28,10 @@ public final class GameView extends View {
         public void run() {
           if (!game.paused && !game.gameOver && !game.event) {
             for (int i = 0; i < game.speed; i++) game.advanceMinute();
+            if (game.screen == CITY_MAP
+                || (game.expeditionController.report() != null
+                    && game.expeditionController.report().state() == Expedition.State.COMPLETED))
+              cityMap.openPendingReport();
             invalidate();
           }
           timer.postDelayed(this, 1000);
@@ -101,6 +105,8 @@ public final class GameView extends View {
     else if (game.screen == 3) overlayRenderer.drawRooms(c);
     else if (game.screen == 4) overlayRenderer.drawRoomDetail(c);
     else overlayRenderer.drawMap(c);
+    if (game.screen != CITY_MAP && cityMap.expeditionPanel)
+      expeditionRenderer.drawPanel(c, new CityMapLayout(H / scale));
     if (game.event) overlayRenderer.drawEvent(c);
     if (game.jobMenu) overlayRenderer.drawJobMenu(c);
     if (game.gameOver) overlayRenderer.drawGameOver(c);
@@ -135,6 +141,7 @@ public final class GameView extends View {
     cityMap.closeSelection();
     game.screen = CITY_MAP;
     game.overlay = 0;
+    cityMap.openPendingReport();
     invalidate();
   }
 
@@ -173,6 +180,15 @@ public final class GameView extends View {
 
   @Override
   public boolean onTouchEvent(MotionEvent e) {
+    if ((game.screen == CITY_MAP || cityMap.expeditionPanel)
+        && !game.event
+        && !game.gameOver
+        && !game.jobMenu) {
+      if (cityMap.scrollTouch(e.getAction(), e.getY() / scale, new CityMapLayout(H / scale))) {
+        invalidate();
+        return true;
+      }
+    }
     if (e.getAction() != MotionEvent.ACTION_UP) return true;
     float x = e.getX() / scale, y = e.getY() / scale, hh = H / scale;
     if (game.gameOver) {
@@ -200,6 +216,11 @@ public final class GameView extends View {
         }
       }
       game.jobMenu = false;
+      invalidate();
+      return true;
+    }
+    if (game.screen != CITY_MAP && cityMap.expeditionPanel) {
+      cityMap.onTouch(x, y, new CityMapLayout(hh));
       invalidate();
       return true;
     }

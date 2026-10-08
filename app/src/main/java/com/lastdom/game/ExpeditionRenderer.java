@@ -9,26 +9,29 @@ final class ExpeditionRenderer {
   private final GameView view;
   private final Paint paint = new Paint(3);
   private Expedition displayed;
+  private Expedition.State displayedState;
 
   ExpeditionRenderer(GameView view) {
     this.view = view;
   }
 
   void drawRoute(Canvas c, CityMapLayout layout) {
-    Expedition expedition = view.game.expeditionController.active();
+    Expedition expedition = view.game.expeditionController.report();
     if (expedition == null) {
       displayed = null;
       return;
     }
     MapLocation target = view.game.expeditionController.location(expedition.locationId);
-    if (displayed != expedition) {
+    if (displayed != expedition || displayedState != expedition.state()) {
       displayed = expedition;
-      view.cityMap.displayProgress = expedition.progress();
+      displayedState = expedition.state();
+      view.cityMap.displayProgress = expedition.routeProgress();
     }
     float progress = view.cityMap.displayProgress;
     if (!view.game.paused && !view.game.event && !view.game.gameOver) {
-      progress += (expedition.progress() - progress) * .2f;
-      if (Math.abs(progress - expedition.progress()) < .0001f) progress = expedition.progress();
+      progress += (expedition.routeProgress() - progress) * .2f;
+      if (Math.abs(progress - expedition.routeProgress()) < .0001f)
+        progress = expedition.routeProgress();
       else view.postInvalidateOnAnimation();
     }
     view.cityMap.displayProgress = progress;
@@ -52,67 +55,107 @@ final class ExpeditionRenderer {
     view.box(c, 30, layout.bottom - 53, 390, layout.bottom - 25, view.panel2, 8);
     view.txt(
         c,
-        "ОТРЯД • "
+        (expedition.state() == Expedition.State.EXPLORING
+                ? "Отряд прибыл • Исследование"
+                : expedition.phaseLabel())
+            + " • "
             + Math.round(expedition.progress() * 100)
             + "% • "
-            + (expedition.state() == Expedition.State.AT_LOCATION
-                ? "ПРИБЫЛ"
-                : expedition.remainingMinutes() + " мин. до цели"),
+            + expedition.remainingMinutes()
+            + " мин.",
         42,
         layout.bottom - 35,
-        11,
+        10,
         view.accent);
   }
 
   void drawPanel(Canvas c, CityMapLayout layout) {
-    Expedition expedition = view.game.expeditionController.active();
+    Expedition expedition = view.game.expeditionController.report();
     if (!view.cityMap.expeditionPanel || expedition == null) return;
     MapLocation target = view.game.expeditionController.location(expedition.locationId);
     view.box(c, 0, 0, 420, view.H / view.scale, android.graphics.Color.argb(180, 8, 13, 18), 0);
     view.box(c, 18, layout.panelTop, 402, layout.panelBottom, view.panel, 16);
     float top = layout.panelTop;
-    view.bold(c, "ЭКСПЕДИЦИЯ", 34, top + 35, 18, view.text);
+    boolean results =
+        expedition.state() == Expedition.State.AWAITING_RETURN
+            || expedition.state() == Expedition.State.COMPLETED;
+    view.bold(
+        c,
+        expedition.state() == Expedition.State.COMPLETED
+            ? "ОТРЯД ВЕРНУЛСЯ"
+            : results ? "ЭКСПЕДИЦИЯ — РЕЗУЛЬТАТЫ" : "ЭКСПЕДИЦИЯ",
+        34,
+        top + 35,
+        results ? 15 : 18,
+        view.text);
     view.bold(c, "×", 372, top + 31, 22, view.muted);
     view.bold(c, target.name, 34, top + 65, 14, view.accent);
+    java.util.List<String> lines = new java.util.ArrayList<>();
     String names = "";
     for (String id : expedition.participantIds) {
       Resident resident = view.game.expeditionController.resident(id);
       if (resident != null) names += (names.isEmpty() ? "" : ", ") + resident.name;
     }
-    view.wrap(c, "Отряд: " + names, 34, top + 93, 386, 12, view.text, 17);
-    view.txt(
+    lines.add("Отряд: " + names);
+    lines.add("Статус: " + expedition.phaseLabel());
+    if (results) {
+      lines.add("НАЙДЕНО / ВЗЯТО С СОБОЙ");
+      for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
+        if (expedition.found.get(resource) > 0 || target.lootTable.max(resource) > 0)
+          lines.add(
+              resource.label
+                  + ": "
+                  + expedition.found.get(resource)
+                  + " / "
+                  + expedition.cargo.get(resource));
+      lines.add("Вместимость отряда: " + expedition.capacity());
+      lines.add(
+          "Всего найдено: " + expedition.found.total() + " • Взято: " + expedition.cargo.total());
+      if (expedition.found.total() > expedition.cargo.total())
+        lines.add("Найдено больше припасов, чем отряд способен унести");
+      lines.add("Событие: " + expedition.explorationEvent.message);
+      lines.add("Истощение: " + target.depletion() + "%");
+      if (expedition.state() == Expedition.State.COMPLETED) {
+        lines.add("ДОСТАВЛЕНО В УБЕЖИЩЕ");
+        for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
+          if (expedition.cargo.get(resource) > 0)
+            lines.add(resource.label + ": +" + expedition.cargo.get(resource));
+        long duration = Math.max(0, expedition.completedMinute - expedition.departureMinute);
+        lines.add("Продолжительность: " + duration / 60 + " ч " + duration % 60 + " мин.");
+        lines.add("Усталость участников: +" + expedition.fatigueGain);
+        lines.add("Ресурсы уже начислены. Кнопка подтверждает просмотр.");
+      } else lines.add("Припасы будут начислены после возвращения в убежище.");
+    } else {
+      if (expedition.state() == Expedition.State.EXPLORING)
+        lines.add("Отряд прибыл. Исследование локации.");
+      lines.add("Прогресс: " + Math.round(expedition.progress() * 100) + "%");
+      lines.add("Осталось: " + expedition.remainingMinutes() + " игровых мин.");
+      lines.add("Грузоподъёмность: " + expedition.capacity());
+      if (expedition.state() == Expedition.State.RETURNING)
+        lines.add("Везёт припасы: " + expedition.cargo.total());
+    }
+    lines.add("СКЛАД ЭКСПЕДИЦИЙ");
+    lines.add(
+        "Медикаменты: " + view.game.expeditionWarehouse.get(ExpeditionLoot.Resource.MEDICINE));
+    lines.add(
+        "Снаряжение: " + view.game.expeditionWarehouse.get(ExpeditionLoot.Resource.EQUIPMENT));
+    MapPanelContent.draw(view, c, layout, lines);
+    view.box(
         c,
-        expedition.state() == Expedition.State.AT_LOCATION ? "Этап: прибытие" : "Этап: путь к цели",
         34,
-        top + 129,
-        12,
-        view.text);
-    view.txt(
+        layout.panelBottom - 66,
+        386,
+        layout.panelBottom - 24,
+        results ? view.accent : view.panel2,
+        10);
+    view.bold(
         c,
-        "До прибытия: " + expedition.remainingMinutes() + " игровых мин.",
-        34,
-        top + 153,
-        12,
-        view.text);
-    view.bar(c, 34, top + 167, 386, 7, Math.round(expedition.progress() * 100), view.accent);
-    view.txt(
-        c,
-        "Прогресс: " + Math.round(expedition.progress() * 100) + "% • " + expedition.state().name(),
-        34,
-        top + 193,
-        10,
-        view.muted);
-    if (expedition.state() == Expedition.State.AT_LOCATION)
-      view.wrap(
-          c,
-          "Отряд прибыл. Исследование локации появится в следующем этапе",
-          34,
-          top + 216,
-          386,
-          11,
-          view.accent,
-          16);
-    view.box(c, 34, layout.panelBottom - 66, 386, layout.panelBottom - 24, view.panel2, 10);
-    view.bold(c, "ЗАКРЫТЬ", 176, layout.panelBottom - 40, 11, view.text);
+        expedition.state() == Expedition.State.AWAITING_RETURN
+            ? "ВЕРНУТЬСЯ В УБЕЖИЩЕ"
+            : expedition.state() == Expedition.State.COMPLETED ? "ЗАБРАТЬ ДОБЫЧУ" : "ЗАКРЫТЬ",
+        results ? 105 : 176,
+        layout.panelBottom - 40,
+        11,
+        results ? view.bg : view.text);
   }
 }

@@ -160,7 +160,7 @@ def main():
             'if(!f.isSynthetic()&&!f.getName().equals("id")&&!f.getName().equals("status")){')
         gameplay_probe = gameplay_probe.replace('state.put("saved",Context.preferences.values.toString());',
             'TreeMap<String,Object> legacy=new TreeMap<>(Context.preferences.values);'
-            'legacy.keySet().removeIf(k->k.startsWith("exp2_")||k.matches("p[0-9]+_id"));'
+            'legacy.keySet().removeIf(k->k.startsWith("exp2_")||k.startsWith("exp3_")||k.startsWith("exp_store_")||k.startsWith("map_")||k.matches("p[0-9]+_id"));'
             'state.put("saved",legacy.toString());')
         fixtures.PROBE = gameplay_probe
         baseline = subprocess.check_output(["git", "show", f"{fixtures.BASELINE}:{fixtures.JAVA_PATH}/MainActivity.java"], cwd=root, text=True)

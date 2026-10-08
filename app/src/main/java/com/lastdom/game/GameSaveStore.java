@@ -63,13 +63,54 @@ final class GameSaveStore {
           .putString(key + "state", expedition.state().name())
           .putString(key + "departure", Long.toString(expedition.departureMinute))
           .putInt(key + "duration", expedition.durationMinutes)
-          .putInt(key + "elapsed", expedition.elapsedMinutes());
+          .putInt(key + "elapsed", expedition.elapsedMinutes())
+          .putString(key + "id", expedition.id)
+          .putString(key + "phaseStart", Long.toString(expedition.phaseStartMinute))
+          .putInt(key + "phaseDuration", expedition.phaseDurationMinutes)
+          .putString(key + "completed", Long.toString(expedition.completedMinute))
+          .putBoolean(key + "generated", expedition.resultGenerated)
+          .putBoolean(key + "credited", expedition.rewardCredited)
+          .putBoolean(key + "acknowledged", expedition.reportAcknowledged)
+          .putInt(key + "fatigueGain", expedition.fatigueGain)
+          .putString(key + "eventType", expedition.explorationEvent.type.name())
+          .putString(key + "eventText", expedition.explorationEvent.message)
+          .putString(key + "injured", expedition.explorationEvent.injuredResidentId)
+          .putInt(key + "damage", expedition.explorationEvent.damage);
+      for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values()) {
+        e.putInt(key + "found_" + resource.name(), expedition.found.get(resource));
+        e.putInt(key + "cargo_" + resource.name(), expedition.cargo.get(resource));
+      }
     }
-    e.apply();
+    e.putInt("exp3_schema", 1);
+    for (MapLocation location : game.cityLocations) {
+      e.putInt("map_" + location.id + "_depletion", location.depletion());
+      e.putString("map_" + location.id + "_state", location.state().name());
+    }
+    for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
+      e.putInt("exp_store_" + resource.name(), game.expeditionWarehouse.get(resource));
+    if (game.expeditions.isEmpty()) e.apply();
+    else if (!e.commit()) throw new IllegalStateException("Не удалось сохранить экспедицию");
   }
 
   void load(GameController game) {
     game.expeditions.clear();
+    for (MapLocation location : game.cityLocations) {
+      location.setDepletion(sp.getInt("map_" + location.id + "_depletion", 0));
+      try {
+        location.setState(
+            MapLocation.State.valueOf(
+                sp.getString(
+                    "map_" + location.id + "_state",
+                    location.kind == MapLocation.Kind.WATER
+                            || location.kind == MapLocation.Kind.HOSPITAL
+                        ? "LOCKED"
+                        : "AVAILABLE")));
+      } catch (IllegalArgumentException exception) {
+        /* Keep the configuration's safe state. */
+      }
+    }
+    for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
+      game.expeditionWarehouse.set(resource, sp.getInt("exp_store_" + resource.name(), 0));
     game.residentVisualReady = false;
     if (!sp.contains("day")) {
       game.reset();
@@ -125,12 +166,19 @@ final class GameSaveStore {
     if (!l.isEmpty()) game.log.addAll(Arrays.asList(l.split("\\n§\\n")));
     if (sp.contains("exp2_schema")) loadExpeditions(game);
     else migrateLegacyExpedition(game);
+    for (Expedition expedition : game.expeditions)
+      if (expedition.state() == Expedition.State.AT_LOCATION)
+        expedition.beginPhase(
+            Expedition.State.EXPLORING,
+            ExpeditionConfig.explorationMinutes(
+                game.expeditionController.location(expedition.locationId)),
+            game.expeditionController.now());
     game.expeditionController.restoreMembership();
   }
 
   private void loadExpeditions(GameController game) {
     java.util.Set<String> used = new java.util.HashSet<>();
-    int count = Math.max(0, Math.min(100, sp.getInt("exp2_count", 0)));
+    int count = Math.max(0, Math.min(10000, sp.getInt("exp2_count", 0)));
     for (int i = 0; i < count; i++) {
       String key = "exp2_" + i + "_";
       try {
@@ -139,11 +187,13 @@ final class GameSaveStore {
             Arrays.asList(sp.getString(key + "participants", "").split(","));
         Expedition.State state = Expedition.State.valueOf(sp.getString(key + "state", ""));
         int duration = sp.getInt(key + "duration", 0), elapsed = sp.getInt(key + "elapsed", 0);
+        int phaseDuration = sp.getInt(key + "phaseDuration", duration);
         long departure = Long.parseLong(sp.getString(key + "departure", "0"));
         if (game.expeditionController.location(target) == null
             || duration <= 0
             || elapsed < 0
-            || elapsed > duration
+            || phaseDuration <= 0
+            || elapsed > phaseDuration
             || ids.isEmpty()
             || ids.size() > ExpeditionConfig.MAX_PARTICIPANTS
             || new java.util.HashSet<>(ids).size() != ids.size()
@@ -155,9 +205,52 @@ final class GameSaveStore {
           state = Expedition.State.AT_LOCATION;
         if (state == Expedition.State.AT_LOCATION) elapsed = duration;
         Expedition expedition = new Expedition(target, ids, departure, duration, elapsed, state);
+        expedition.id = sp.getString(key + "id", "legacy-exp-" + i + "-" + departure);
+        expedition.restorePhase(
+            state,
+            phaseDuration,
+            elapsed,
+            Long.parseLong(sp.getString(key + "phaseStart", Long.toString(departure))));
+        expedition.completedMinute = Long.parseLong(sp.getString(key + "completed", "0"));
+        expedition.resultGenerated = sp.getBoolean(key + "generated", false);
+        expedition.rewardCredited =
+            sp.getBoolean(key + "credited", state == Expedition.State.COMPLETED);
+        expedition.reportAcknowledged =
+            sp.getBoolean(
+                key + "acknowledged",
+                state == Expedition.State.COMPLETED && !sp.contains("exp3_schema"));
+        expedition.fatigueGain = Math.max(0, sp.getInt(key + "fatigueGain", 0));
+        expedition.explorationEvent =
+            new ExpeditionEvent(
+                ExpeditionEvent.Type.valueOf(sp.getString(key + "eventType", "QUIET")),
+                sp.getString(key + "eventText", "Исследование прошло спокойно"),
+                sp.getString(key + "injured", ""),
+                sp.getInt(key + "damage", 0));
+        for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values()) {
+          expedition.found.set(resource, sp.getInt(key + "found_" + resource.name(), 0));
+          expedition.cargo.set(resource, sp.getInt(key + "cargo_" + resource.name(), 0));
+        }
+        if (expedition.cargo.total() > expedition.capacity()) throw new IllegalArgumentException();
+        if (state == Expedition.State.RETURNING || state == Expedition.State.AWAITING_RETURN)
+          if (!expedition.resultGenerated) throw new IllegalArgumentException();
+        if (expedition.rewardCredited && state != Expedition.State.COMPLETED)
+          throw new IllegalArgumentException();
+        if (state == Expedition.State.COMPLETED && !expedition.rewardCredited)
+          throw new IllegalArgumentException();
+        if (state == Expedition.State.AT_LOCATION) {
+          expedition.beginPhase(
+              Expedition.State.EXPLORING,
+              ExpeditionConfig.explorationMinutes(game.expeditionController.location(target)),
+              game.expeditionController.now());
+        }
+        if (state == Expedition.State.EXPLORING && expedition.resultGenerated)
+          expedition.beginPhase(
+              Expedition.State.AWAITING_RETURN, 1, game.expeditionController.now());
         if (expedition.active()
             && game.expeditions.stream().filter(Expedition::active).count()
                 >= ExpeditionConfig.MAX_ACTIVE) throw new IllegalArgumentException();
+        if (game.expeditions.stream().anyMatch(existing -> existing.id.equals(expedition.id)))
+          throw new IllegalArgumentException();
         game.expeditions.add(expedition);
         if (expedition.active()) used.addAll(ids);
       } catch (IllegalArgumentException exception) {

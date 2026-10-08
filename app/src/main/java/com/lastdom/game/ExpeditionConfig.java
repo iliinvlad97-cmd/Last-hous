@@ -16,6 +16,37 @@ final class ExpeditionConfig {
     }
   }
 
+  static int explorationMinutes(MapLocation location) {
+    switch (location.risk) {
+      case LOW:
+        return 30;
+      case LOW_MEDIUM:
+        return 45;
+      case MEDIUM:
+        return 60;
+      default:
+        return 90;
+    }
+  }
+
+  static double negativeProbability(MapLocation location, boolean guard) {
+    double base;
+    switch (location.risk) {
+      case LOW:
+        base = .05;
+        break;
+      case LOW_MEDIUM:
+        base = .10;
+        break;
+      case MEDIUM:
+        base = .15;
+        break;
+      default:
+        base = .25;
+    }
+    return base * (guard ? .85 : 1);
+  }
+
   static float[][] route(MapLocation target) {
     return new float[][] {
       {CityMapLayout.SHELTER_X, CityMapLayout.SHELTER_Y},

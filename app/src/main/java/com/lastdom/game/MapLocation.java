@@ -32,7 +32,7 @@ final class MapLocation {
 
   enum Risk {
     LOW("Низкий", "НИЗКИЙ"),
-    LOW_MEDIUM("Низкий / средний", "УМЕРЕННЫЙ"),
+    LOW_MEDIUM("Умеренный", "УМЕРЕННЫЙ"),
     MEDIUM("Средний", "СРЕДНИЙ"),
     HIGH("Высокий", "ВЫСОКИЙ");
     final String label, markerLabel;
@@ -49,6 +49,8 @@ final class MapLocation {
   final Risk risk;
   final float mapX, mapY;
   private State state;
+  final LootTable lootTable;
+  private int depletion;
 
   MapLocation(
       String id,
@@ -66,6 +68,7 @@ final class MapLocation {
     this.markerName = markerName;
     this.loot = loot;
     this.kind = kind;
+    this.lootTable = LootTable.forKind(kind);
     this.distance = distance;
     this.risk = risk;
     this.mapX = mapX;
@@ -85,7 +88,20 @@ final class MapLocation {
     return state == State.LOCKED;
   }
 
+  int depletion() {
+    return depletion;
+  }
+
+  void setDepletion(int value) {
+    depletion = Math.max(0, Math.min(100, value));
+  }
+
+  boolean depleted() {
+    return depletion >= 100;
+  }
+
   String statusLabel() {
+    if (depleted()) return "Истощена";
     switch (state) {
       case LOCKED:
         return "Район не исследован";

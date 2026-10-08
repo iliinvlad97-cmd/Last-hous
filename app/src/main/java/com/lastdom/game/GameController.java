@@ -57,6 +57,15 @@ class GameController extends GameState {
   void reset() {
     residentVisualReady = false;
     expeditions.clear();
+    for (MapLocation location : cityLocations) {
+      location.setDepletion(0);
+      location.setState(
+          location.kind == MapLocation.Kind.WATER || location.kind == MapLocation.Kind.HOSPITAL
+              ? MapLocation.State.LOCKED
+              : MapLocation.State.AVAILABLE);
+    }
+    for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
+      expeditionWarehouse.set(resource, 0);
     day = 1;
     gameMinute = 480;
     speed = 1;
