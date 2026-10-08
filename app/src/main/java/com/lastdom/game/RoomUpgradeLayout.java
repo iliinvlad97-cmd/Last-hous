@@ -13,7 +13,7 @@ final class RoomUpgradeLayout {
     rowTop = top + 90;
     pageY = actionTop - 26;
     capacity = Math.max(1, (int) ((pageY - 16 - rowTop) / 64));
-    visibleLines = Math.max(1, (int) ((actionTop - 30 - (top + 93)) / 18));
+    visibleLines = Math.max(1, (int) ((actionTop - 30 - (top + 93)) / RoomEfficiencyRenderer.LINE));
   }
 
   boolean action(float x, float y) {

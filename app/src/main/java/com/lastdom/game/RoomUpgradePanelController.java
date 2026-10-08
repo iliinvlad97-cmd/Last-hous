@@ -39,7 +39,7 @@ final class RoomUpgradePanelController {
     }
     if (action == android.view.MotionEvent.ACTION_MOVE && dragging) {
       if (Math.abs(y - startY) > 8) moved = true;
-      int delta = (int) ((dragY - y) / 18);
+      int delta = (int) ((dragY - y) / RoomEfficiencyRenderer.LINE);
       if (delta != 0) {
         scroll =
             Math.max(0, Math.min(Math.max(0, lineCount - layout.visibleLines), scroll + delta));

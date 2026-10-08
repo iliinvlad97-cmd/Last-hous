@@ -32,7 +32,7 @@ final class ProductionController {
     return value;
   }
 
-  private int workerQuality(Resident r, int room) {
+  int workerQuality(Resident r, int room) {
     return (int)
         Math.round(
             game.survivalController.efficiencyPercent(r)
@@ -53,18 +53,26 @@ final class ProductionController {
   }
 
   int kitchenSavingBasis() {
+    return kitchenSavingBasis(game.roomLevels[1]);
+  }
+
+  int kitchenSavingBasis(int level) {
     return Math.min(
         ProductionConfig.KITCHEN_MAX_SAVING,
         staffPercent(1, "Еда")
             * ProductionConfig.KITCHEN_SAVING
-            * game.roomUpgradeController.percent(1)
+            * RoomUpgradeConfig.percent(1, level)
             / 100);
   }
 
   int foodRationMinutes() {
+    return foodRationMinutes(game.roomLevels[1]);
+  }
+
+  int foodRationMinutes(int level) {
     return ProductionConfig.DAY
         * ProductionConfig.BASIS
-        / (ProductionConfig.BASIS - kitchenSavingBasis());
+        / (ProductionConfig.BASIS - kitchenSavingBasis(level));
   }
 
   boolean reserveFood(Resident r) {
@@ -77,11 +85,15 @@ final class ProductionController {
   }
 
   int workshopSavingBasis() {
+    return workshopSavingBasis(game.roomLevels[3]);
+  }
+
+  int workshopSavingBasis(int level) {
     return Math.min(
         ProductionConfig.WORKSHOP_MAX_SAVING,
         staffPercent(3, "Материалы")
             * ProductionConfig.WORKSHOP_SAVING
-            * game.roomUpgradeController.percent(3)
+            * RoomUpgradeConfig.percent(3, level)
             / 100);
   }
 
@@ -143,9 +155,13 @@ final class ProductionController {
   }
 
   double energyPerDay() {
+    return energyPerDay(game.roomLevels[0]);
+  }
+
+  double energyPerDay(int level) {
     if (game.roomCondition[0] <= 0 || game.power >= ProductionConfig.ENERGY_CAPACITY) return 0;
     return RoomUpgradeConfig.BASE_ENERGY_PER_DAY
-        * game.roomUpgradeController.percent(0)
+        * RoomUpgradeConfig.percent(0, level)
         * generatorPercent()
         / 10000.0;
   }
@@ -162,18 +178,82 @@ final class ProductionController {
     return amount;
   }
 
-  double medicalPerDay() {
-    if (!medicineAvailable() || !hasPatient()) return 0;
-    int base = 0;
+  int medicalWeight() {
+    int total = 0;
+    for (Resident r : game.people) if (worker(r, "Лечение")) total += r.skill + 1;
+    return total;
+  }
+
+  double medicalEfficiency() {
+    int base = medicalWeight();
     double effective = 0;
     for (Resident r : game.people)
-      if (worker(r, "Лечение")) {
-        base += r.skill + 1;
-        effective += (r.skill + 1) * SurvivalConfig.efficiency(r);
-      }
-    return base == 0
-        ? 0
-        : (base / 2) * effective / base * game.roomUpgradeController.percent(2) / 100.0;
+      if (worker(r, "Лечение")) effective += (r.skill + 1) * SurvivalConfig.efficiency(r);
+    return base == 0 ? 0 : effective / base;
+  }
+
+  int clinicalRateHundredths(int level) {
+    // This rounded hundredths/day rate is exactly what SurvivalController applies.
+    return (int)
+        Math.round(
+            (medicalWeight() / 2) * medicalEfficiency() * RoomUpgradeConfig.percent(2, level));
+  }
+
+  double medicalPerDay() {
+    return medicalPerDay(game.roomLevels[2]);
+  }
+
+  double medicalPerDay(int level) {
+    return medicineAvailable() && hasPatient() ? clinicalRateHundredths(level) / 100.0 : 0;
+  }
+
+  int patients() {
+    int count = 0;
+    for (Resident r : game.people) if (patient(r)) count++;
+    return count;
+  }
+
+  int homeResidents() {
+    int count = 0;
+    for (Resident r : game.people) if (r.alive && !game.isOnExpedition(r)) count++;
+    return count;
+  }
+
+  double foodDemandPerDay() {
+    return homeResidents() * (double) ProductionConfig.DAY / foodRationMinutes();
+  }
+
+  boolean reserveWater(Resident r) {
+    if (game.isOnExpedition(r) || !r.alive || r.waterMinutes > 0 || game.water <= 0) return false;
+    game.water--;
+    r.waterMinutes = ProductionConfig.DAY;
+    game.production.waterRations = ProductionState.add(game.production.waterRations, 1);
+    return true;
+  }
+
+  double maintenancePerDay(boolean equipment) {
+    double rate = 0;
+    for (Resident r : game.people)
+      if (worker(r, "Ремонт"))
+        rate +=
+            (equipment
+                    ? ProductionConfig.GENERATOR_REPAIR_PER_DAY
+                    : ProductionConfig.MAINTENANCE_BASE_PER_DAY + r.skill)
+                * game.survivalController.efficiencyPercent(r)
+                / 100.0;
+    return rate;
+  }
+
+  double guardsPerDay() {
+    double rate = 0;
+    for (Resident r : game.people)
+      if (worker(r, "Охрана"))
+        rate +=
+            (ProductionConfig.GUARD_BASE_PER_DAY + r.skill)
+                * game.roomUpgradeController.percent(4)
+                * game.survivalController.efficiencyPercent(r)
+                / 10000.0;
+    return rate;
   }
 
   private int output(int base, int room, int effectiveness, int minutes, String key) {

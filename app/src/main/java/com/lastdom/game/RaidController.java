@@ -47,14 +47,22 @@ final class RaidController {
   }
 
   double defensePower() {
-    double power = RaidResolver.barricadePower(game.roomLevels[4], durability);
+    return defensePower(game.roomLevels[4]);
+  }
+
+  double defensePower(int level) {
+    double power = RaidResolver.barricadePower(level, durability);
     RaidState raid = active();
     if (raid != null)
       for (String id : raid.defenders.keySet()) {
         Resident resident = game.expeditionController.resident(id);
-        if (resident != null && eligible(resident)) power += RaidResolver.residentPower(resident);
+        if (resident != null) power += defenderPower(resident);
       }
     return power;
+  }
+
+  double defenderPower(Resident resident) {
+    return defending(resident) && eligible(resident) ? RaidResolver.residentPower(resident) : 0;
   }
 
   private boolean eligible(Resident r) {

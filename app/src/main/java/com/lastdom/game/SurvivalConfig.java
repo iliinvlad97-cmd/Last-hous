@@ -36,11 +36,14 @@ final class SurvivalConfig {
     return NEED_FACTORS[band];
   }
 
+  static double moraleFactor(int morale) {
+    return MORALE_FACTORS[morale >= 70 ? 3 : morale >= 40 ? 2 : morale >= 20 ? 1 : 0];
+  }
+
   static double efficiency(Resident r) {
     if (!r.alive || r.health <= 0) return 0;
     double health = r.health / 100.0;
-    double morale =
-        MORALE_FACTORS[r.morale >= 70 ? 3 : r.morale >= 40 ? 2 : r.morale >= 20 ? 1 : 0];
+    double morale = moraleFactor(r.morale);
     return health * needFactor(r.hunger) * needFactor(r.thirst) * needFactor(r.fatigue) * morale;
   }
 

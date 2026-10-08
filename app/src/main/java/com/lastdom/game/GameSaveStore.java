@@ -13,6 +13,7 @@ final class GameSaveStore {
   }
 
   void save(GameController game) {
+    game.resourceAccounting.observe(game);
     SharedPreferences.Editor e = sp.edit();
     e.putInt("day", game.day)
         .putInt("gameMinute", game.gameMinute)
@@ -142,6 +143,7 @@ final class GameSaveStore {
           game.productionRemainders.values.getOrDefault("survival6_" + channel, 0));
     ProductionSaveStore.save(game.production, e);
     RaidSaveStore.save(game, e);
+    game.resourceAccounting.save(e);
     if (!e.commit()) throw new IllegalStateException("Не удалось сохранить игру");
   }
 
@@ -152,6 +154,7 @@ final class GameSaveStore {
     game.survivalController.reset();
     game.raidController.reset();
     game.production.reset();
+    game.resourceAccounting.reset();
     for (MapLocation location : game.cityLocations) {
       location.setDepletion(sp.getInt("map_" + location.id + "_depletion", 0));
       try {
@@ -278,6 +281,7 @@ final class GameSaveStore {
       }
     ProductionSaveStore.load(game.production, sp);
     RaidSaveStore.load(game, sp);
+    game.resourceAccounting.load(game, sp);
   }
 
   private long safeLong(String key, long fallback) {

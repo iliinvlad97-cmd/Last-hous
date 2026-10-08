@@ -76,7 +76,8 @@ final class SurvivalController {
   }
 
   private boolean medicalStaffAvailable() {
-    if (!game.productionController.medicineAvailable()) return false;
+    if (!game.productionController.medicineAvailable()
+        || game.productionController.clinicalRateHundredths(game.roomLevels[2]) <= 0) return false;
     for (Resident staff : game.people)
       if (working(staff)
           && staff.job.equals("Лечение")
@@ -123,14 +124,8 @@ final class SurvivalController {
   void advanceMinute() {
     // Staff effects are sampled once per minute; a patient never counts as medical staff.
     for (Resident r : game.people) recoverAI(r);
-    double medics = 0;
-    int baseMedics = 0;
-    for (Resident r : game.people)
-      if (working(r) && r.job.equals("Лечение")) {
-        medics += (r.skill + 1) * SurvivalConfig.efficiency(r);
-        baseMedics += r.skill + 1;
-      }
-    boolean clinic = game.productionController.beginClinicMinute(baseMedics > 0 && medics > 0);
+    int clinicalRate = game.productionController.clinicalRateHundredths(game.roomLevels[2]);
+    boolean clinic = game.productionController.beginClinicMinute(clinicalRate > 0);
     for (Resident r : game.people) {
       if (!r.alive) continue;
       clamp(r);
@@ -140,10 +135,7 @@ final class SurvivalController {
         // Water retains 1440 minutes. The saved balance
         // prevents recharging on reload; away residents neither consume nor use this ration.
         game.productionController.reserveFood(r);
-        if (r.waterMinutes == 0 && game.water > 0) {
-          game.water--;
-          r.waterMinutes = 1440;
-        }
+        game.productionController.reserveWater(r);
       }
       boolean fed = !away && r.foodMinutes > 0, watered = !away && r.waterMinutes > 0;
       change(r, "hunger", (fed ? -1 : 1) * SurvivalConfig.HUNGER_PER_DAY * 100);
@@ -185,12 +177,7 @@ final class SurvivalController {
           && !game.isDefending(r)
           && r.hunger < SurvivalConfig.CRITICAL
           && r.thirst < SurvivalConfig.CRITICAL) {
-        if (clinic)
-          healthRate +=
-              (int)
-                  Math.round(
-                      (baseMedics == 0 ? 0 : (baseMedics / 2) * medics / baseMedics)
-                          * game.roomUpgradeController.percent(2));
+        if (clinic) healthRate += clinicalRate;
         if (rest) healthRate += SurvivalConfig.REST_HEALTH_PER_DAY * 100;
       }
       change(r, "health", healthRate);

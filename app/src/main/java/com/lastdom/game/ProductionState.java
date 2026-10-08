@@ -6,6 +6,7 @@ package com.lastdom.game;
 final class ProductionState {
   int medicineMinutes, materialSavingRemainder;
   long energyProduced, waterProduced, foodRations, medicineDoses, materialsSaved;
+  long waterRations, energyUsed;
 
   static long add(long value, long amount) {
     return value > Long.MAX_VALUE - amount ? Long.MAX_VALUE : value + amount;
@@ -13,6 +14,8 @@ final class ProductionState {
 
   void reset() {
     medicineMinutes = materialSavingRemainder = 0;
-    energyProduced = waterProduced = foodRations = medicineDoses = materialsSaved = 0;
+    energyProduced =
+        waterProduced =
+            foodRations = medicineDoses = materialsSaved = waterRations = energyUsed = 0;
   }
 }

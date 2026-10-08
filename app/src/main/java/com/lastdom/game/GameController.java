@@ -64,6 +64,7 @@ class GameController extends GameState {
     roomUpgrades.clear();
     productionRemainders.values.clear();
     production.reset();
+    resourceAccounting.reset();
     survivalController.reset();
     raidController.reset();
     for (MapLocation location : cityLocations) {
@@ -135,7 +136,9 @@ class GameController extends GameState {
   }
 
   void dailyCycle() {
+    int energySpent = Math.min(1, Math.max(0, power));
     power = Math.max(0, power - 1);
+    production.energyUsed = ProductionState.add(production.energyUsed, energySpent);
     threat = Math.min(100, threat + 2 + rnd.nextInt(4));
     for (int i = 0; i < 6; i++)
       roomCondition[i] = Math.max(15, roomCondition[i] - (1 + rnd.nextInt(3)));
