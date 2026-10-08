@@ -148,6 +148,7 @@ DRAW_METHODS = "drawColor drawText drawRect drawRoundRect drawBitmap drawCircle 
 STUBS["android/graphics/Canvas.java"] = (
     "package android.graphics; public class Canvas {"
     "public final java.util.List<String> commands=new java.util.ArrayList<>();"
+    + "public int save(){commands.add(\"save\");return 1;}public void restore(){commands.add(\"restore\");}public boolean clipRect(float l,float t,float r,float b){commands.add(\"clipRect\"+java.util.Arrays.toString(new float[]{l,t,r,b}));return true;}"
     + "".join(
         f'public void {name}(Object... args){{commands.add("{name}"+java.util.Arrays.toString(args));}}'
         for name in DRAW_METHODS

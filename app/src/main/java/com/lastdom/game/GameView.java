@@ -206,7 +206,7 @@ public final class GameView extends View {
   @Override
   public boolean onTouchEvent(MotionEvent e) {
     if (defensePanel.open && !game.gameOver) {
-      RoomUpgradeLayout defenseLayout = new RoomUpgradeLayout(H / scale);
+      DefensePanelLayout defenseLayout = defenseRenderer.layout();
       if (defensePanel.scrollTouch(e.getAction(), e.getY() / scale, defenseLayout)) {
         invalidate();
         return true;

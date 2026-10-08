@@ -17,7 +17,8 @@ final class DefensePanelController {
   Mode mode = Mode.STATUS;
   RaidState report;
   String message = "", shownWarning = "", shownResult = "";
-  int scroll, lineCount, page;
+  int scroll, page;
+  float contentHeight;
   private boolean dragging, moved;
   private float startY, lastY;
 
@@ -36,7 +37,8 @@ final class DefensePanelController {
   }
 
   void reset() {
-    scroll = page = lineCount = 0;
+    scroll = page = 0;
+    contentHeight = 0;
     message = "";
   }
 
@@ -78,15 +80,20 @@ final class DefensePanelController {
     return mode == Mode.DEFENDERS || mode == Mode.BUILDERS;
   }
 
-  int pages(RoomUpgradeLayout l) {
+  boolean repairAccessible() {
+    RaidController controller = view.game.raidController;
+    return controller.repairing() || controller.repairReason().isEmpty();
+  }
+
+  int pages(DefensePanelLayout l) {
     return Math.max(1, (view.game.people.size() + l.capacity - 1) / l.capacity);
   }
 
-  boolean scrollTouch(int action, float y, RoomUpgradeLayout l) {
+  boolean scrollTouch(int action, float y, DefensePanelLayout l) {
     if (!open) return false;
     if (action == MotionEvent.ACTION_DOWN) {
       startY = lastY = y;
-      dragging = y >= l.top + 78 && y < l.actionTop - 24;
+      dragging = y >= l.bodyTop && y < l.bodyBottom;
       moved = false;
       return true;
     }
@@ -98,9 +105,9 @@ final class DefensePanelController {
           lastY = y;
         }
       } else {
-        int delta = (int) ((lastY - y) / 18);
+        int delta = (int) (lastY - y);
         if (delta != 0) {
-          scroll = Math.max(0, Math.min(Math.max(0, lineCount - l.visibleLines), scroll + delta));
+          scroll = Math.max(0, Math.min(l.maxScroll(contentHeight), scroll + delta));
           lastY = y;
         }
       }
@@ -119,20 +126,20 @@ final class DefensePanelController {
     return false;
   }
 
-  void touch(float x, float y, RoomUpgradeLayout l) {
+  void touch(float x, float y, DefensePanelLayout l) {
     if (x < 18 || x > 402 || y < l.top || y > l.bottom || x > 350 && y < l.top + 48) {
       open = false;
       return;
     }
     if (list()) {
-      int row = (int) ((y - l.rowTop) / 64), index = page * l.capacity + row;
+      int row = (int) ((y - l.rowTop) / l.rowHeight), index = page * l.capacity + row;
       if (x >= 30
           && x <= 390
           && y >= l.rowTop
           && y < l.pageY - 16
           && row < l.capacity
           && index < view.game.people.size()
-          && (y - l.rowTop) % 64 <= 56) {
+          && (y - l.rowTop) % l.rowHeight <= l.rowHeight - DefensePanelLayout.ROW_GAP) {
         Resident resident = view.game.people.get(index);
         message =
             mode == Mode.DEFENDERS
@@ -159,18 +166,20 @@ final class DefensePanelController {
           mode = Mode.BUILDERS;
           reset();
         }
+      } else if (report != null && !report.active()) {
+        view.game.raidController.acknowledge(report);
+        open = false;
       } else if (active != null && active.phase != RaidState.Phase.ATTACK) {
         view.game.raidController.prepare();
         mode = Mode.DEFENDERS;
         report = active;
         reset();
-      } else if (report != null && !report.active()) {
-        view.game.raidController.acknowledge(report);
-        open = false;
       }
     } else if (l.secondary(y)) {
-      if (x >= 214) open = false;
-      else if (x >= 30) {
+      if (x >= 214
+          || report != null && !report.active() && mode != Mode.REPAIR && !repairAccessible())
+        open = false;
+      else if (x >= 30 && (mode == Mode.REPAIR || repairAccessible())) {
         mode = mode == Mode.REPAIR ? Mode.STATUS : Mode.REPAIR;
         reset();
       }
