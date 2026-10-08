@@ -16,6 +16,7 @@ PROBE = raids.PROBE[:raids.PROBE.index(' static void frequency()')] + r'''
  }
  static void zeroNeeds(GameView v){for(Resident r:v.game.people){r.hunger=r.thirst=r.fatigue=0;r.health=r.morale=100;r.foodMinutes=r.waterMinutes=1440;}}
  static void idle(GameView v){zeroNeeds(v);for(Resident r:v.game.people)r.job="Отдых";}
+ static Canvas roomText(GameView v,String target){int old=v.roomUpgradePanel.scroll;Canvas c=new Canvas();v.roomUpgradeRenderer.draw(c);for(int i=0;i<v.roomUpgradePanel.lineCount&&!c.commands.stream().anyMatch(s->s.contains(target));i++){v.roomUpgradePanel.scroll=i;c=new Canvas();v.roomUpgradeRenderer.draw(c);}v.roomUpgradePanel.scroll=old;return c;}
  static void generatorsAndWater(){
   for(int level=1;level<=3;level++){
    GameView v=fresh();idle(v);v.game.power=10;v.game.roomLevels[0]=level;
@@ -99,7 +100,7 @@ PROBE = raids.PROBE[:raids.PROBE.index(' static void frequency()')] + r'''
  }
  static void ui(){
   for(int[] size:new int[][]{{360,640},{420,640},{420,840},{540,960},{1080,2340}})for(int room=0;room<6;room++){
-   GameView v=fresh();View.width=size[0];View.height=size[1];draw(v);v.roomUpgradePanel.open(room);String before=snapshot(v);Canvas c=draw(v);if(room!=4)text(c,"ПРОИЗВОДСТВО / ПОЛЕЗНЫЙ ЭФФЕКТ");text(c,"ЗАКРЫТЬ");text(c,room==4?"ОБОРОНА / РЕМОНТ":"НАЗНАЧИТЬ");RoomUpgradeLayout l=new RoomUpgradeLayout(v.H/v.scale);require(l.secondaryTop+43<l.bottom,"production footer accessible above nav");
+   GameView v=fresh();View.width=size[0];View.height=size[1];draw(v);v.roomUpgradePanel.open(room);String before=snapshot(v);Canvas c=draw(v);if(room!=4)text(roomText(v,"ПРОИЗВОДСТВО / ПОЛЕЗНЫЙ ЭФФЕКТ"),"ПРОИЗВОДСТВО / ПОЛЕЗНЫЙ ЭФФЕКТ");text(c,"ЗАКРЫТЬ");text(c,room==4?"ОБОРОНА / РЕМОНТ":"НАЗНАЧИТЬ");RoomUpgradeLayout l=new RoomUpgradeLayout(v.H/v.scale);require(l.secondaryTop+43<l.bottom,"production footer accessible above nav");
    v.roomUpgradePanel.message="ОченьДлинноеНазваниеБезПробелов".repeat(8);v.roomUpgradePanel.scroll=0;c=draw(v);for(String cmd:c.commands)if(cmd.startsWith("drawText[Очень")){String content=cmd.substring(cmd.indexOf('[')+1,cmd.indexOf(", "));require(content.length()<100,"long production word wraps without clipping");}v.roomUpgradePanel.scroll=10000;c=draw(v);int wrapped=0;for(String cmd:c.commands)if(cmd.startsWith("drawText[Очень")){wrapped++;String content=cmd.substring(cmd.indexOf('[')+1,cmd.indexOf(", "));require(content.length()<100,"scrolled long production word fits");}require(wrapped>0,"long message visible after scrolling");require(v.roomUpgradePanel.scroll<10000,"production scroll clamps to content");for(int i=0;i<5;i++)draw(v);require(before.equals(snapshot(v)),"production UI read-only in room "+room);tap(v,290,l.secondaryTop+20);require(v.game.overlay==0,"close works independently of scroll");
   }
  }

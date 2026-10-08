@@ -2,6 +2,38 @@ package com.lastdom.game;
 
 /** One production owner. No Canvas, random rolls, wall clock or parallel resource/room models. */
 final class ProductionController {
+  /** Read-only view of the existing prepaid-ration economy, not a second consumption clock. */
+  static final class FoodBalance {
+    final int residents, rationMinutes, workerSavingBasis, levelSavingBasis, nominalSavingBasis;
+    final double consumptionPerDay, savedPerDay, effectiveSavingPercent;
+    final long spentToday, spentPreviousDay, nextDayRequired, nextDayAffordable;
+    final int accountingStart, previousDay, previousStart;
+    final long stockEmptyMinute, shortageMinute;
+
+    FoodBalance(ProductionController p) {
+      GameController g = p.game;
+      residents = p.homeResidents();
+      rationMinutes = p.foodRationMinutes();
+      workerSavingBasis = p.kitchenSavingBasis(1);
+      nominalSavingBasis = p.kitchenSavingBasis();
+      levelSavingBasis = nominalSavingBasis - workerSavingBasis;
+      consumptionPerDay = p.foodDemandPerDay();
+      savedPerDay = residents - consumptionPerDay;
+      effectiveSavingPercent = p.effectiveFoodSavingPercent(g.roomLevels[1]);
+      ResourceAccounting a = g.resourceAccounting;
+      spentToday = a.used[ResourceAccounting.FOOD];
+      accountingStart = a.startMinute;
+      spentPreviousDay = a.previousUsed[ResourceAccounting.FOOD];
+      previousDay = a.previousDay;
+      previousStart = a.previousStart;
+      nextDayRequired = p.foodRequestsWithin(ProductionConfig.DAY, rationMinutes);
+      nextDayAffordable = Math.min(Math.max(0, g.food), nextDayRequired);
+      stockEmptyMinute =
+          residents == 0 ? -1 : g.food <= 0 ? 0 : p.foodPurchaseMinute(g.food, rationMinutes);
+      shortageMinute = p.foodPurchaseMinute((long) Math.max(0, g.food) + 1, rationMinutes);
+    }
+  }
+
   static final class UpgradeQuote {
     final int base, cost, saved, remainder;
 
@@ -220,7 +252,40 @@ final class ProductionController {
   }
 
   double foodDemandPerDay() {
-    return homeResidents() * (double) ProductionConfig.DAY / foodRationMinutes();
+    return foodDemandPerDay(game.roomLevels[1]);
+  }
+
+  double foodDemandPerDay(int level) {
+    return homeResidents() * (double) ProductionConfig.DAY / foodRationMinutes(level);
+  }
+
+  double effectiveFoodSavingPercent(int level) {
+    return 100.0 * (1 - (double) ProductionConfig.DAY / foodRationMinutes(level));
+  }
+
+  FoodBalance foodBalance() {
+    return new FoodBalance(this);
+  }
+
+  private long foodRequestsWithin(long minutes, int duration) {
+    long requests = 0;
+    for (Resident r : game.people)
+      if (r.alive && !game.isOnExpedition(r) && minutes > r.foodMinutes)
+        requests += 1 + (minutes - 1 - r.foodMinutes) / duration;
+    return requests;
+  }
+
+  private long foodPurchaseMinute(long units, int duration) {
+    if (homeResidents() == 0) return -1;
+    // Each home's next debit happens when its saved foodMinutes reaches zero; new debits recur
+    // every foodRationMinutes. Find the requested debit without advancing or charging the game.
+    long low = 0, high = ProductionConfig.MAX_FOOD_MINUTES + units * duration;
+    while (low < high) {
+      long middle = low + (high - low) / 2;
+      if (foodRequestsWithin(middle + 1, duration) >= units) high = middle;
+      else low = middle + 1;
+    }
+    return low + 1; // The first request is on the next simulated minute, never during rendering.
   }
 
   boolean reserveWater(Resident r) {

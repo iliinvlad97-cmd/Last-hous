@@ -7,11 +7,13 @@ final class RoomUpgradeRenderer {
   private final GameView view;
   private final ProductionRenderer production;
   private final RoomEfficiencyRenderer efficiency;
+  private final ResidentAssignmentRenderer assignments;
 
   RoomUpgradeRenderer(GameView view) {
     this.view = view;
     this.production = new ProductionRenderer(view);
     this.efficiency = new RoomEfficiencyRenderer(view);
+    this.assignments = new ResidentAssignmentRenderer(view);
   }
 
   void draw(Canvas c) {
@@ -73,38 +75,20 @@ final class RoomUpgradeRenderer {
   }
 
   private void drawBuilders(Canvas c, RoomUpgradeLayout layout) {
-    int pages = Math.max(1, (view.game.people.size() + layout.capacity - 1) / layout.capacity);
-    int page = Math.min(view.roomUpgradePanel.page, pages - 1);
+    RoomUpgradePanelController panel = view.roomUpgradePanel;
+    panel.refreshBuilders();
+    int pages = Math.max(1, (panel.builderIds.size() + layout.capacity - 1) / layout.capacity);
+    panel.page = Math.min(panel.page, pages - 1);
+    int page = panel.page;
     for (int row = 0; row < layout.capacity; row++) {
       int i = page * layout.capacity + row;
-      if (i >= view.game.people.size()) break;
-      Resident resident = view.game.people.get(i);
-      float top = layout.rowTop + row * 64;
-      String reason = view.game.roomUpgradeController.unavailableReason(resident);
-      view.box(c, 30, top, 390, top + 56, view.panel2, 9);
-      view.residentRenderer.drawMiniPortrait(c, resident, 50, top + 24, i);
-      view.bold(
-          c,
-          resident.name + " • " + resident.role,
-          74,
-          top + 20,
-          12,
-          reason.isEmpty() ? view.text : view.muted);
-      view.txt(
-          c,
-          "Здоровье " + resident.health + " • усталость " + resident.fatigue,
-          74,
-          top + 36,
-          9,
-          view.muted);
-      view.txt(
-          c,
-          reason.isEmpty() ? "Доступен • " + resident.job : reason,
-          74,
-          top + 50,
-          9,
-          reason.isEmpty() ? view.good : view.danger);
+      if (i >= panel.builderIds.size()) break;
+      Resident resident = view.game.expeditionController.resident(panel.builderIds.get(i));
+      float top = layout.rowTop + row * RoomUpgradeLayout.ASSIGNMENT_ROW;
+      assignments.row(c, resident, top, view.game.selectedRoom, "Строительство", true, false);
     }
+    if (panel.builderIds.isEmpty())
+      view.txt(c, "Нет доступных строителей", 30, layout.rowTop + 24, 12, view.muted);
     view.txt(c, "‹ Назад", 34, layout.pageY, 11, view.muted);
     view.txt(c, (page + 1) + " / " + pages, 190, layout.pageY, 11, view.text);
     view.txt(c, "Далее ›", 326, layout.pageY, 11, view.muted);
@@ -127,19 +111,15 @@ final class RoomUpgradeRenderer {
       int index = panel.page * capacity + row;
       if (index >= panel.workerIds.size()) break;
       Resident resident = view.game.expeditionController.resident(panel.workerIds.get(index));
-      float top = layout.workerRowTop(kitchen) + row * 64;
-      view.box(c, 30, top, 390, top + 56, view.panel2, 9);
-      view.residentRenderer.drawMiniPortrait(
-          c, resident, 50, top + 24, view.game.people.indexOf(resident));
-      view.bold(c, resident.name + " • " + resident.role, 74, top + 20, 12, view.text);
-      view.txt(c, "Сейчас: " + resident.job, 74, top + 36, 11, view.muted);
-      view.txt(
+      float top = layout.workerRowTop(kitchen) + row * RoomUpgradeLayout.ASSIGNMENT_ROW;
+      assignments.row(
           c,
-          "Здоровье " + resident.health + "% • усталость " + resident.fatigue + "%",
-          74,
-          top + 50,
-          11,
-          view.good);
+          resident,
+          top,
+          view.game.selectedRoom,
+          panel.assignmentJob,
+          false,
+          panel.assignedIds.contains(resident.id));
     }
     if (panel.workerIds.isEmpty()) {
       view.txt(
@@ -151,7 +131,7 @@ final class RoomUpgradeRenderer {
           view.muted);
       view.txt(
           c,
-          "Занятые и уже назначенные не показаны",
+          "Занятые и обязательный отдых не показаны",
           30,
           layout.workerRowTop(kitchen) + 44,
           11,

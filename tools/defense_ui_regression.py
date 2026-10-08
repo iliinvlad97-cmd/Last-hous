@@ -53,9 +53,9 @@ PROBE = raids.PROBE[:raids.PROBE.index(' static void frequency()')] + r'''
    if(size[0]==420&&size[1]==840)emit(v,"preparation");
    primary(v);require(v.defensePanel.mode==DefensePanelController.Mode.DEFENDERS,"prepare opens roster");draw(v);bounded(v);widths(v);
    tap(v,80,layout(v).rowTop+22);require(raid(v).defenders.containsKey(v.game.people.get(0).id),"shared geometry selects resident");
-   // All pages remain reachable, unavailable rows show a reason and cannot be assigned.
-   v.game.people.get(1).health=20;draw(v);require(!v.defenseRenderer.content.residents.get(1).available,"low-health reason shown");
-   tap(v,80,layout(v).rowTop+layout(v).rowHeight+22);require(!raid(v).defenders.containsKey(v.game.people.get(1).id),"unavailable resident never assigned");
+   // Unavailable residents are filtered; the controller still rejects stale/direct assignment.
+   v.game.people.get(1).health=20;draw(v);String unavailable=v.game.people.get(1).id;require(v.defenseRenderer.content.residents.stream().noneMatch(row->row.id.equals(unavailable)),"low-health resident not offered for assignment");
+   String before=snapshot(v);require(!v.game.raidController.toggleDefender(unavailable).isEmpty()&&before.equals(snapshot(v)),"unavailable resident never assigned, no mutation");
    primary(v);draw(v);text(draw(v),"Иван");bounded(v);
    minutes(v,60);v.defensePanel.pending();draw(v);text(draw(v),"Сила защиты в бою");text(draw(v),"ПРОГРЕСС НАПАДЕНИЯ");bounded(v);
    require(!v.defenseRenderer.content.primaryEnabled&&!v.defenseRenderer.content.secondaryEnabled,"battle locks roster/repair start");
@@ -100,10 +100,10 @@ PROBE = raids.PROBE[:raids.PROBE.index(' static void frequency()')] + r'''
   DefensePanelContent.Block stock=v.defenseRenderer.content.blocks.get(1);v.p.setTypeface(DefensePanelContent.BOLD);v.p.setTextSize(v.sy(stock.leftValueSize));
   require(v.p.measureText(stock.leftValue)<=v.sy(152),"large saved stock fits compact stat tile");
   primary(v);Resident builder=v.game.people.get(0);builder.job="Отдых";builder.fatigue=0;builder.autoRecovery=false;builder.survivalFractions.put("fatigue",1);draw(v);
-  require(!v.defenseRenderer.content.residents.get(0).available,"fractional rest still excludes builder");
+  require(v.defenseRenderer.content.residents.stream().noneMatch(row->row.id.equals(builder.id)),"fractional rest still excludes builder");
   DefensePanelContent previous=v.defenseRenderer.content;builder.survivalFractions.put("fatigue",0);draw(v);
-  require(v.defenseRenderer.content!=previous&&v.defenseRenderer.content.residents.get(0).available,"cached availability updates when fractional rest completes");
-  builder.autoRecovery=true;draw(v);require(!v.defenseRenderer.content.residents.get(0).available,"automatic rest lock reflected without integer stat changes");
+  require(v.defenseRenderer.content!=previous&&v.defenseRenderer.content.residents.stream().anyMatch(row->row.id.equals(builder.id)),"cached availability updates when fractional rest completes");
+  builder.autoRecovery=true;draw(v);require(v.defenseRenderer.content.residents.stream().noneMatch(row->row.id.equals(builder.id)),"automatic rest lock reflected without integer stat changes");
   for(int value:new int[]{90,50,20}){v.game.raidController.durability=value;v.defensePanel.mode=DefensePanelController.Mode.REPAIR;draw(v);
    require(v.defenseRenderer.content.blocks.get(0).color==(value>=70?v.good:value>=35?v.accent:v.danger),"green/orange/red durability states");}
  }

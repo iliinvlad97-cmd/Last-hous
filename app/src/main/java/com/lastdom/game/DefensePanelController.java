@@ -18,6 +18,7 @@ final class DefensePanelController {
   RaidState report;
   String message = "", shownWarning = "", shownResult = "";
   int scroll, page;
+  final java.util.ArrayList<String> residentIds = new java.util.ArrayList<>();
   float contentHeight;
   private boolean dragging, moved;
   private float startY, lastY;
@@ -40,6 +41,25 @@ final class DefensePanelController {
     scroll = page = 0;
     contentHeight = 0;
     message = "";
+    refreshResidents();
+  }
+
+  void refreshResidents() {
+    residentIds.clear();
+    if (!list()) return;
+    for (RoomAssignmentController.Category category : RoomAssignmentController.Category.values())
+      for (Resident resident : view.game.people) {
+        boolean selected = mode == Mode.DEFENDERS && view.game.raidController.defending(resident);
+        String reason =
+            mode == Mode.DEFENDERS
+                ? view.game.raidController.defenderReason(resident)
+                : view.game.roomUpgradeController.unavailableReason(resident);
+        RoomAssignmentController.Category actual =
+            selected
+                ? RoomAssignmentController.Category.ASSIGNED
+                : view.game.roomAssignmentController.availableCategory(resident);
+        if (actual == category && (selected || reason.isEmpty())) residentIds.add(resident.id);
+      }
   }
 
   void pending() {
@@ -86,7 +106,7 @@ final class DefensePanelController {
   }
 
   int pages(DefensePanelLayout l) {
-    return Math.max(1, (view.game.people.size() + l.capacity - 1) / l.capacity);
+    return Math.max(1, (residentIds.size() + l.capacity - 1) / l.capacity);
   }
 
   boolean scrollTouch(int action, float y, DefensePanelLayout l) {
@@ -138,13 +158,13 @@ final class DefensePanelController {
           && y >= l.rowTop
           && y < l.pageY - 16
           && row < l.capacity
-          && index < view.game.people.size()
+          && index < residentIds.size()
           && (y - l.rowTop) % l.rowHeight <= l.rowHeight - DefensePanelLayout.ROW_GAP) {
-        Resident resident = view.game.people.get(index);
+        String residentId = residentIds.get(index);
         message =
             mode == Mode.DEFENDERS
-                ? view.game.raidController.toggleDefender(resident.id)
-                : view.game.raidController.startRepair(resident.id);
+                ? view.game.raidController.toggleDefender(residentId)
+                : view.game.raidController.startRepair(residentId);
         if (mode == Mode.BUILDERS && message.isEmpty()) {
           mode = Mode.REPAIR;
           reset();

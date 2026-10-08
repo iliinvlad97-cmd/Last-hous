@@ -9,6 +9,8 @@ final class RoomUpgradePanelController {
   String assignmentJob = "";
   // IDs of the visible candidates, so a stale tap can never select a different resident.
   final java.util.ArrayList<String> workerIds = new java.util.ArrayList<>();
+  final java.util.HashSet<String> assignedIds = new java.util.HashSet<>();
+  final java.util.ArrayList<String> builderIds = new java.util.ArrayList<>();
   int page, scroll, lineCount;
   private boolean dragging, moved;
   private float dragY, startY;
@@ -23,6 +25,8 @@ final class RoomUpgradePanelController {
     choosing = false;
     assigning = false;
     workerIds.clear();
+    assignedIds.clear();
+    builderIds.clear();
     assignmentJob = RoomUpgradeConfig.valid(room) ? game.roomJobs[room] : "";
     builderId = "";
     message = "";
@@ -35,6 +39,8 @@ final class RoomUpgradePanelController {
     choosing = false;
     assigning = false;
     workerIds.clear();
+    assignedIds.clear();
+    builderIds.clear();
   }
 
   boolean scrollTouch(int action, float y, RoomUpgradeLayout layout) {
@@ -78,15 +84,16 @@ final class RoomUpgradePanelController {
       return;
     }
     if (choosing) {
-      int index = page * layout.capacity + (int) ((y - layout.rowTop) / 64);
-      float local = (y - layout.rowTop) % 64;
+      int index =
+          page * layout.capacity + (int) ((y - layout.rowTop) / RoomUpgradeLayout.ASSIGNMENT_ROW);
+      float local = (y - layout.rowTop) % RoomUpgradeLayout.ASSIGNMENT_ROW;
       if (x >= 30
           && x <= 390
           && y >= layout.rowTop
           && y < layout.pageY - 16
-          && local <= 56
-          && index < game.people.size()) {
-        Resident resident = game.people.get(index);
+          && local <= RoomUpgradeLayout.ASSIGNMENT_ROW - 8
+          && index < builderIds.size()) {
+        Resident resident = game.expeditionController.resident(builderIds.get(index));
         message = game.roomUpgradeController.unavailableReason(resident);
         if (message.isEmpty()) {
           builderId = resident.id;
@@ -94,7 +101,7 @@ final class RoomUpgradePanelController {
           scroll = 0;
         }
       } else if (y >= layout.pageY - 16 && y <= layout.pageY + 12) {
-        int pages = Math.max(1, (game.people.size() + layout.capacity - 1) / layout.capacity);
+        int pages = Math.max(1, (builderIds.size() + layout.capacity - 1) / layout.capacity);
         if (x < 120) page = Math.max(0, page - 1);
         else if (x > 300) page = Math.min(pages - 1, page + 1);
       } else if (layout.action(x, y)) {
@@ -110,6 +117,7 @@ final class RoomUpgradePanelController {
           choosing = true;
           page = 0;
           scroll = 0;
+          refreshBuilders();
         } else {
           message = game.roomUpgradeController.start(game.selectedRoom, builderId);
           if (message.isEmpty()) builderId = "";
@@ -134,10 +142,26 @@ final class RoomUpgradePanelController {
 
   void refreshWorkers() {
     workerIds.clear();
-    for (Resident resident : game.people)
-      if (game.roomAssignmentController
-          .unavailableReason(game.selectedRoom, assignmentJob, resident)
-          .isEmpty()) workerIds.add(resident.id);
+    assignedIds.clear();
+    for (RoomAssignmentController.Category category : RoomAssignmentController.Category.values())
+      for (Resident resident : game.people)
+        if (game.roomAssignmentController.category(game.selectedRoom, assignmentJob, resident)
+            == category) {
+          workerIds.add(resident.id);
+          if (category == RoomAssignmentController.Category.ASSIGNED) assignedIds.add(resident.id);
+        }
+  }
+
+  void refreshBuilders() {
+    builderIds.clear();
+    for (RoomAssignmentController.Category category :
+        new RoomAssignmentController.Category[] {
+          RoomAssignmentController.Category.FREE, RoomAssignmentController.Category.TRANSFER
+        })
+      for (Resident resident : game.people)
+        if (game.roomUpgradeController.unavailableReason(resident).isEmpty()
+            && game.roomAssignmentController.availableCategory(resident) == category)
+          builderIds.add(resident.id);
   }
 
   private void touchWorkers(float x, float y, RoomUpgradeLayout layout) {
@@ -153,19 +177,24 @@ final class RoomUpgradePanelController {
     }
     int capacity = layout.workerCapacity(kitchen);
     float rowTop = layout.workerRowTop(kitchen);
-    int row = (int) ((y - rowTop) / 64), index = page * capacity + row;
+    int row = (int) ((y - rowTop) / RoomUpgradeLayout.ASSIGNMENT_ROW),
+        index = page * capacity + row;
     if (x >= 30
         && x <= 390
         && y >= rowTop
         && y < layout.pageY - 16
         && row < capacity
-        && (y - rowTop) % 64 <= 56
+        && (y - rowTop) % RoomUpgradeLayout.ASSIGNMENT_ROW <= RoomUpgradeLayout.ASSIGNMENT_ROW - 8
         && index < workerIds.size()) {
       String id = workerIds.get(index);
-      message = game.roomAssignmentController.assign(game.selectedRoom, assignmentJob, id);
+      boolean removing = assignedIds.contains(id);
+      message =
+          removing
+              ? game.roomAssignmentController.unassign(game.selectedRoom, assignmentJob, id)
+              : game.roomAssignmentController.assign(game.selectedRoom, assignmentJob, id);
       if (message.isEmpty()) {
         Resident resident = game.expeditionController.resident(id);
-        message = resident.name + ": " + assignmentJob + ".";
+        message = resident.name + ": " + (removing ? "назначен отдых" : assignmentJob) + ".";
         assigning = false;
         scroll = 0;
         // A worker can no longer be the pending builder of this panel.

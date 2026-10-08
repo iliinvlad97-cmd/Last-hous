@@ -20,6 +20,7 @@ final class ProductionRenderer {
     cachedSignature = key;
     List<RoomEfficiencyRenderer.Row> rows = new ArrayList<>();
     GameController g = view.game;
+    if (room == 1) foodBalance(rows);
     upgrade(rows, room);
     normal(rows, (room == 5 ? "Отдыхают: " : "Работают: ") + g.occupants(room));
     section(rows, "ПРОИЗВОДСТВО / ПОЛЕЗНЫЙ ЭФФЕКТ");
@@ -101,7 +102,11 @@ final class ProductionRenderer {
       case 0:
         return number(p.energyPerDay(level)) + " энергии/день";
       case 1:
-        return "экономия еды " + number(p.kitchenSavingBasis(level) / 100.0) + "%";
+        return "экономия еды "
+            + number(p.effectiveFoodSavingPercent(level))
+            + "% по минутам пайка; ≈"
+            + number(p.foodDemandPerDay(level))
+            + " еды/сутки";
       case 2:
         return number(p.medicalPerDay(level)) + " здоровья/день на пациента";
       case 3:
@@ -183,6 +188,70 @@ final class ProductionRenderer {
         if (r.waterMinutes > 0) watered++;
       }
     normal(rows, "Оплаченные пайки: еда " + fed + " • вода " + watered);
+  }
+
+  private void foodBalance(List<RoomEfficiencyRenderer.Row> rows) {
+    GameController g = view.game;
+    ProductionController.FoodBalance b = g.productionController.foodBalance();
+    section(rows, "БАЛАНС ПРОДОВОЛЬСТВИЯ");
+    normal(rows, "Запас: " + g.food + " еды • производство еды: 0");
+    if (g.food <= 0 && b.residents > 0)
+      warning(rows, "Запас исчерпан; остаётся только оплаченное питание");
+    normal(rows, "Базовое потребление: " + b.residents + " еды/сутки (жители дома)");
+    normal(rows, "Расход в среднем: ≈" + number(b.consumptionPerDay) + " еды/сутки");
+    good(rows, "Экономия в среднем: ≈" + number(b.savedPerDay) + " еды/сутки");
+    normal(
+        rows,
+        "Фактически сегодня: " + b.spentToday + " еды, учёт с " + g.formatBuild(b.accountingStart));
+    if (b.stockEmptyMinute < 0) normal(rows, "Запас не расходуется: нет жителей дома");
+    else
+      normal(
+          rows,
+          "До исчерпания запаса: ≈"
+              + number(b.stockEmptyMinute / (double) ProductionConfig.DAY)
+              + " суток");
+    section(rows, "КАК РАБОТАЕТ ЭКОНОМИЯ");
+    good(rows, "Работники: " + number(b.workerSavingBasis / 100.0) + "% экономии при уровне 1");
+    good(
+        rows,
+        "Уровень кухни: +"
+            + (g.roomUpgradeController.percent(1) - 100)
+            + "% к эффекту поваров (+"
+            + number(b.levelSavingBasis / 100.0)
+            + " п.п.)");
+    normal(rows, "Задано: " + number(b.nominalSavingBasis / 100.0) + "% • предел 25%");
+    normal(rows, "По целым минутам пайка: " + number(b.effectiveSavingPercent) + "% экономии");
+    normal(
+        rows, "1 еда оплачивает " + b.rationMinutes + " минут питания; старые пайки сохраняются");
+    normal(
+        rows,
+        "На следующие 24 ч: нужно "
+            + b.nextDayRequired
+            + " еды, можно оплатить "
+            + b.nextDayAffordable);
+    if (b.shortageMinute >= 0)
+      normal(
+          rows,
+          "Питание без нехватки ещё: ≈"
+              + number(b.shortageMinute / (double) ProductionConfig.DAY)
+              + " суток, включая оплаченные пайки");
+    if (b.nextDayAffordable < b.nextDayRequired)
+      warning(
+          rows,
+          "Не хватит еды для всех следующих пайков: " + (b.nextDayRequired - b.nextDayAffordable));
+    if (b.previousDay > 0)
+      normal(
+          rows,
+          "Д"
+              + b.previousDay
+              + ": фактически "
+              + b.spentPreviousDay
+              + " еды, учёт с "
+              + g.formatBuild(b.previousStart));
+    muted(
+        rows,
+        "Средний расход и экономия — для новых пайков. Прогноз: неизменные состав и эффективность,"
+            + " без пополнений и потерь; оплаченные минуты учтены");
   }
 
   private void clinic(List<RoomEfficiencyRenderer.Row> rows) {

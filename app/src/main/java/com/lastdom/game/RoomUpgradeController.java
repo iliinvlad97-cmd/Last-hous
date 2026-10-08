@@ -25,6 +25,7 @@ final class RoomUpgradeController {
     if (game.isOnExpedition(resident)) return "В экспедиции";
     if (game.isBuilding(resident)) return "Занят строительством";
     if (game.isDefending(resident)) return "Назначен на оборону";
+    if (game.survivalController.treating(resident)) return "На лечении";
     if (game.survivalController.protectedRest(resident)) return "Восстанавливает силы в спальне";
     return "";
   }

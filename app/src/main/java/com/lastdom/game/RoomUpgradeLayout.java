@@ -2,6 +2,7 @@ package com.lastdom.game;
 
 /** One logical coordinate system for the room overlay, scrolling and builder choice hit areas. */
 final class RoomUpgradeLayout {
+  static final int ASSIGNMENT_ROW = 104;
   final float top, bottom, actionTop, secondaryTop, rowTop, pageY;
   final int capacity, visibleLines;
 
@@ -12,7 +13,7 @@ final class RoomUpgradeLayout {
     secondaryTop = bottom - 69;
     rowTop = top + 90;
     pageY = actionTop - 26;
-    capacity = Math.max(1, (int) ((pageY - 16 - rowTop) / 64));
+    capacity = Math.max(1, (int) ((pageY - 16 - rowTop) / ASSIGNMENT_ROW));
     visibleLines = Math.max(1, (int) ((actionTop - 30 - (top + 93)) / RoomEfficiencyRenderer.LINE));
   }
 
@@ -29,6 +30,6 @@ final class RoomUpgradeLayout {
   }
 
   int workerCapacity(boolean kitchen) {
-    return Math.max(1, (int) ((pageY - 16 - workerRowTop(kitchen)) / 64));
+    return Math.max(1, (int) ((pageY - 16 - workerRowTop(kitchen)) / ASSIGNMENT_ROW));
   }
 }

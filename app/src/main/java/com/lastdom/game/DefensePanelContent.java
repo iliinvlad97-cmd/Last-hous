@@ -18,6 +18,7 @@ final class DefensePanelContent {
   }
 
   static final class ResidentRow {
+    String id;
     List<String> title, detail;
     String condition;
     boolean selected, available;
@@ -82,14 +83,17 @@ final class DefensePanelContent {
                 + " мин.";
 
     if (ui.list()) {
-      for (Resident resident : view.game.people) {
+      ui.refreshResidents();
+      for (String residentId : ui.residentIds) {
+        Resident resident = view.game.expeditionController.resident(residentId);
         ResidentRow row = new ResidentRow();
+        row.id = residentId;
         row.selected = controller.defending(resident);
         String reason =
             ui.mode == DefensePanelController.Mode.DEFENDERS
                 ? controller.defenderReason(resident)
                 : view.game.roomUpgradeController.unavailableReason(resident);
-        row.available = reason.isEmpty();
+        row.available = row.selected || reason.isEmpty();
         row.title =
             wrap(resident.name + " • " + resident.role + (row.selected ? " ✓" : ""), 12, 336, true);
         row.condition =
@@ -99,18 +103,28 @@ final class DefensePanelContent {
                 + resident.fatigue
                 + " • мораль "
                 + resident.morale;
+        RoomAssignmentController assignments = view.game.roomAssignmentController;
+        String category =
+            row.selected
+                ? "УЖЕ НАЗНАЧЕН • нажмите, чтобы снять"
+                : assignments.availableCategory(resident).label;
         row.detail =
             wrap(
-                !reason.isEmpty()
-                    ? reason
-                    : row.selected
-                        ? "На обороне • нажмите, чтобы снять"
-                        : ui.mode == DefensePanelController.Mode.DEFENDERS
-                            ? "Сила "
-                                + number(RaidResolver.residentPower(resident))
-                                + " • "
-                                + resident.job
-                            : "Доступен • " + resident.job,
+                "Сейчас: "
+                    + resident.job
+                    + "\n"
+                    + category
+                    + "\n"
+                    + assignments.profession(
+                        resident,
+                        4,
+                        "Охрана",
+                        ui.mode == DefensePanelController.Mode.BUILDERS,
+                        ui.mode == DefensePanelController.Mode.DEFENDERS)
+                    + (row.selected ? "" : "\n" + assignments.transfer(resident))
+                    + (ui.mode == DefensePanelController.Mode.DEFENDERS
+                        ? "\nСила " + number(RaidResolver.residentPower(resident))
+                        : ""),
                 11,
                 336,
                 false);
