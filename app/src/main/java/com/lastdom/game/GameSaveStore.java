@@ -75,10 +75,41 @@ final class GameSaveStore {
           .putString(key + "eventType", expedition.explorationEvent.type.name())
           .putString(key + "eventText", expedition.explorationEvent.message)
           .putString(key + "injured", expedition.explorationEvent.injuredResidentId)
-          .putInt(key + "damage", expedition.explorationEvent.damage);
+          .putInt(key + "damage", expedition.explorationEvent.damage)
+          .putBoolean(key + "cityChecked", expedition.cityEventChecked)
+          .putBoolean(key + "lootRolled", expedition.lootRolled)
+          .putInt(key + "explorationDelay", expedition.explorationDelay)
+          .putInt(key + "riskReduction", expedition.cityRiskReduction)
+          .putString(key + "cityEventId", expedition.explorationEvent.instanceId)
+          .putInt(key + "cityAction", expedition.explorationEvent.chosenAction)
+          .putBoolean(key + "cityApplied", expedition.explorationEvent.effectsApplied)
+          .putBoolean(key + "cityContinued", expedition.explorationEvent.continued)
+          .putString(
+              key + "cityVictims",
+              android.text.TextUtils.join(
+                  ",", expedition.explorationEvent.outcome.healthLoss.keySet()))
+          .putString(key + "cityResult", expedition.explorationEvent.outcome.message)
+          .putInt(key + "cityDelay", expedition.explorationEvent.outcome.delayMinutes)
+          .putInt(key + "cityReduction", expedition.explorationEvent.outcome.riskReduction)
+          .putBoolean(key + "cityRetreat", expedition.explorationEvent.outcome.retreat);
+      for (String id : expedition.participantIds) {
+        e.putInt(
+            key + "cityHealth_" + id,
+            expedition.explorationEvent.outcome.healthLoss.getOrDefault(id, 0));
+        e.putInt(
+            key + "cityFatigue_" + id,
+            expedition.explorationEvent.outcome.fatigueAdded.getOrDefault(id, 0));
+      }
       for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values()) {
         e.putInt(key + "found_" + resource.name(), expedition.found.get(resource));
         e.putInt(key + "cargo_" + resource.name(), expedition.cargo.get(resource));
+        e.putInt(key + "unsearched_" + resource.name(), expedition.unsearchedLoot.get(resource));
+        e.putInt(
+            key + "cityAdded_" + resource.name(),
+            expedition.explorationEvent.outcome.added.get(resource));
+        e.putInt(
+            key + "cityLost_" + resource.name(),
+            expedition.explorationEvent.outcome.lost.get(resource));
       }
     }
     e.putInt("exp3_schema", 1);
@@ -230,6 +261,51 @@ final class GameSaveStore {
           expedition.found.set(resource, sp.getInt(key + "found_" + resource.name(), 0));
           expedition.cargo.set(resource, sp.getInt(key + "cargo_" + resource.name(), 0));
         }
+        expedition.cityEventChecked =
+            sp.getBoolean(key + "cityChecked", expedition.resultGenerated);
+        expedition.lootRolled = sp.getBoolean(key + "lootRolled", expedition.resultGenerated);
+        expedition.explorationDelay = Math.max(0, sp.getInt(key + "explorationDelay", 0));
+        expedition.cityRiskReduction =
+            Math.max(0, Math.min(80, sp.getInt(key + "riskReduction", 0)));
+        ExpeditionEvent event = expedition.explorationEvent;
+        event.instanceId = sp.getString(key + "cityEventId", "");
+        event.chosenAction = sp.getInt(key + "cityAction", -1);
+        event.effectsApplied = sp.getBoolean(key + "cityApplied", false);
+        event.continued = sp.getBoolean(key + "cityContinued", false);
+        event.outcome.message = sp.getString(key + "cityResult", "");
+        event.outcome.delayMinutes = Math.max(0, sp.getInt(key + "cityDelay", 0));
+        event.outcome.riskReduction =
+            Math.max(0, Math.min(80, sp.getInt(key + "cityReduction", 0)));
+        event.outcome.retreat = sp.getBoolean(key + "cityRetreat", false);
+        for (String id : ids) {
+          int health = Math.max(0, sp.getInt(key + "cityHealth_" + id, 0)),
+              fatigue = Math.max(0, sp.getInt(key + "cityFatigue_" + id, 0));
+          if (health > 0
+              || java.util.Arrays.asList(sp.getString(key + "cityVictims", "").split(","))
+                  .contains(id)) event.outcome.healthLoss.put(id, health);
+          if (fatigue > 0) event.outcome.fatigueAdded.put(id, fatigue);
+        }
+        for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values()) {
+          expedition.unsearchedLoot.set(
+              resource, sp.getInt(key + "unsearched_" + resource.name(), 0));
+          event.outcome.added.set(resource, sp.getInt(key + "cityAdded_" + resource.name(), 0));
+          event.outcome.lost.set(resource, sp.getInt(key + "cityLost_" + resource.name(), 0));
+        }
+        if (event.interactive()) {
+          int actions = ExpeditionEventConfig.actions(event.type).length;
+          if (actions == 0
+              || !expedition.cityEventChecked
+              || !expedition.lootRolled
+              || event.chosenAction < -1
+              || event.chosenAction >= actions
+              || (event.effectsApplied != (event.chosenAction >= 0))
+              || (event.continued && !event.effectsApplied)) throw new IllegalArgumentException();
+          if (state == Expedition.State.AWAITING_DECISION && event.continued)
+            throw new IllegalArgumentException();
+          if (state != Expedition.State.AWAITING_DECISION && !event.continued)
+            throw new IllegalArgumentException();
+        } else if (state == Expedition.State.AWAITING_DECISION)
+          throw new IllegalArgumentException();
         if (expedition.cargo.total() > expedition.capacity()) throw new IllegalArgumentException();
         if (state == Expedition.State.RETURNING || state == Expedition.State.AWAITING_RETURN)
           if (!expedition.resultGenerated) throw new IllegalArgumentException();

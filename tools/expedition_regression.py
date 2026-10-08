@@ -22,7 +22,7 @@ public class RegressionProbe {
  static void require(boolean b,String s){if(!b)throw new AssertionError(s);checks++;}
  static void close(float a,float b,String s){require(Math.abs(a-b)<.001,s+": "+a+" != "+b);}
  static GameView fresh(int w,int h){View.width=w;View.height=h;Context.preferences=new MemoryPreferences();return loaded();}
- static GameView loaded(){GameView v=new GameView(new Context());draw(v);return v;}
+ static GameView loaded(){GameView v=new GameView(new Context());v.game.rnd=new Random(){public double nextDouble(){return .99;}public int nextInt(int n){return n-1;}};draw(v);return v;}
  static Canvas draw(GameView v){Canvas c=new Canvas();v.onDraw(c);return c;}
  static void text(Canvas c,String text){require(c.commands.stream().anyMatch(s->s.contains(text)),"text: "+text);}
  static void tap(GameView v,float x,float y){require(v.onTouchEvent(new MotionEvent(x*v.scale,y*v.scale,MotionEvent.ACTION_UP)),"tap consumed");}
@@ -137,7 +137,7 @@ public class RegressionProbe {
   for(int location:new int[]{0,2,4}){
    v=fresh(420,840);MapLocation target=v.game.cityLocations.get(location);target.setState(MapLocation.State.AVAILABLE);
    int duration=location==0?45:location==2?90:150;require(ExpeditionConfig.oneWayMinutes(target)==duration,"central distance balance");
-   v.game.gameMinute=1439;v.game.rnd=new Random(){public int nextInt(int n){return n-1;}};
+   v.game.gameMinute=1439;v.game.rnd=new Random(){public double nextDouble(){return .99;}public int nextInt(int n){return n-1;}};
    require(v.game.expeditionController.start(target.id,ids(v,0)).isEmpty(),"distance launches");
    v.game.advanceMinute();require(v.game.day==2&&v.game.expeditionController.active().elapsedMinutes()==1,"midnight travel continuous");
    float[] start=ExpeditionConfig.point(target,0),end=ExpeditionConfig.point(target,1);

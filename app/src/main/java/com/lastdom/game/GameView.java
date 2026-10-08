@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v0.9.6 • EXPEDITIONS • STAGE 3";
+  static final String VERSION_LABEL = "v0.9.7 • CITY EVENTS • STAGE 4";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -30,8 +30,9 @@ public final class GameView extends View {
             for (int i = 0; i < game.speed; i++) game.advanceMinute();
             if (game.screen == CITY_MAP
                 || (game.expeditionController.report() != null
-                    && game.expeditionController.report().state() == Expedition.State.COMPLETED))
-              cityMap.openPendingReport();
+                    && (game.expeditionController.report().state() == Expedition.State.COMPLETED
+                        || game.expeditionController.report().state()
+                            == Expedition.State.AWAITING_DECISION))) cityMap.openPendingReport();
             invalidate();
           }
           timer.postDelayed(this, 1000);
@@ -46,6 +47,7 @@ public final class GameView extends View {
   final CityMapController cityMap;
   final CityMapRenderer cityMapRenderer = new CityMapRenderer(this);
   final ExpeditionRenderer expeditionRenderer = new ExpeditionRenderer(this);
+  final ExpeditionEventRenderer expeditionEventRenderer = new ExpeditionEventRenderer(this);
   final ExpeditionPreparationRenderer expeditionPreparationRenderer =
       new ExpeditionPreparationRenderer(this);
 
@@ -55,6 +57,9 @@ public final class GameView extends View {
     fullSceneBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.shelter_full_scene);
     game = new GameController(context.getSharedPreferences("save_v02", 0), this::invalidate);
     cityMap = new CityMapController(game);
+    Expedition restored = game.expeditionController.active();
+    if (restored != null && restored.state() == Expedition.State.AWAITING_DECISION)
+      cityMap.openPendingReport();
     timer.postDelayed(tick, 1000);
   }
 
@@ -107,6 +112,7 @@ public final class GameView extends View {
     else overlayRenderer.drawMap(c);
     if (game.screen != CITY_MAP && cityMap.expeditionPanel)
       expeditionRenderer.drawPanel(c, new CityMapLayout(H / scale));
+    if (cityMap.eventPanel) expeditionEventRenderer.draw(c, new CityMapLayout(H / scale));
     if (game.event) overlayRenderer.drawEvent(c);
     if (game.jobMenu) overlayRenderer.drawJobMenu(c);
     if (game.gameOver) overlayRenderer.drawGameOver(c);
@@ -180,7 +186,7 @@ public final class GameView extends View {
 
   @Override
   public boolean onTouchEvent(MotionEvent e) {
-    if ((game.screen == CITY_MAP || cityMap.expeditionPanel)
+    if ((game.screen == CITY_MAP || cityMap.expeditionPanel || cityMap.eventPanel)
         && !game.event
         && !game.gameOver
         && !game.jobMenu) {
@@ -219,7 +225,7 @@ public final class GameView extends View {
       invalidate();
       return true;
     }
-    if (game.screen != CITY_MAP && cityMap.expeditionPanel) {
+    if (game.screen != CITY_MAP && (cityMap.expeditionPanel || cityMap.eventPanel)) {
       cityMap.onTouch(x, y, new CityMapLayout(hh));
       invalidate();
       return true;

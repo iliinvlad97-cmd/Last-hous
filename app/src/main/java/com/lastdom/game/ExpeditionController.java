@@ -122,7 +122,14 @@ final class ExpeditionController {
           && state != Expedition.State.EXPLORING
           && state != Expedition.State.RETURNING) continue;
       changed = true;
-      if (!expedition.advanceMinute()) continue;
+      boolean phaseFinished = expedition.advanceMinute();
+      if (state == Expedition.State.EXPLORING
+          && !expedition.cityEventChecked
+          && expedition.elapsedMinutes() >= Math.max(1, expedition.phaseDurationMinutes / 2)) {
+        checkCityEvent(expedition);
+        if (expedition.state() == Expedition.State.AWAITING_DECISION) continue;
+      }
+      if (!phaseFinished) continue;
       if (state == Expedition.State.TRAVELING_TO_TARGET) beginExploration(expedition);
       else if (state == Expedition.State.EXPLORING) finishExploration(expedition);
       else complete(expedition);
@@ -167,72 +174,173 @@ final class ExpeditionController {
     return false;
   }
 
-  void finishExploration(Expedition expedition) {
-    if (expedition.resultGenerated
-        || expedition.state() != Expedition.State.EXPLORING
-        || expedition.remainingMinutes() != 0) return;
+  void rollLoot(Expedition expedition) {
+    if (expedition.lootRolled) return;
     MapLocation target = location(expedition.locationId);
     double factor =
         (.6 + .2 * expedition.participantIds.size())
             * conditionFactor(expedition)
             * (1 - target.depletion() / 100.0);
-    ExpeditionLoot found = new ExpeditionLoot();
     for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values()) {
       int min = target.lootTable.min(resource), max = target.lootTable.max(resource);
       int roll = max == 0 ? 0 : min + game.rnd.nextInt(max - min + 1);
-      found.set(
-          resource, (int) Math.round(roll * factor * (1 + professionBonus(expedition, resource))));
+      int quantity = (int) Math.round(roll * factor * (1 + professionBonus(expedition, resource)));
+      expedition.found.set(resource, quantity / 2);
+      expedition.unsearchedLoot.set(resource, quantity - quantity / 2);
     }
-    ExpeditionEvent event;
-    if (game.rnd.nextDouble() < ExpeditionConfig.negativeProbability(target, guard(expedition))) {
-      int negative = game.rnd.nextInt(3);
-      if (negative == 1) {
-        Resident victim =
-            resident(
-                expedition.participantIds.get(game.rnd.nextInt(expedition.participantIds.size())));
-        int damage = 8 + game.rnd.nextInt(13);
-        int actual = victim == null ? 0 : Math.min(damage, Math.max(0, victim.health - 1));
-        if (victim != null) victim.health = Math.max(1, victim.health - actual);
-        event =
-            new ExpeditionEvent(
-                ExpeditionEvent.Type.INJURY,
-                (victim == null ? "Житель" : victim.name)
-                    + " получил травму (-"
-                    + actual
-                    + " здоровья)",
-                victim == null ? "" : victim.id,
-                actual);
-      } else {
-        for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
-          found.set(resource, (int) Math.floor(found.get(resource) * .75));
-        event =
-            new ExpeditionEvent(
-                negative == 0 ? ExpeditionEvent.Type.DAMAGED : ExpeditionEvent.Type.THREAT,
-                negative == 0
-                    ? "Часть припасов повреждена"
-                    : "Отряд столкнулся с угрозой и потерял часть добычи",
-                "",
-                0);
-      }
-    } else if (game.rnd.nextInt(100) < 15) {
+    expedition.lootRolled = true;
+    expedition.cargo = expedition.found.cargo(expedition.capacity());
+  }
+
+  void checkCityEvent(Expedition expedition) {
+    if (expedition.cityEventChecked || expedition.state() != Expedition.State.EXPLORING) return;
+    expedition.cityEventChecked = true;
+    MapLocation target = location(expedition.locationId);
+    if (game.rnd.nextDouble() >= ExpeditionEventConfig.probability(target)) return;
+    java.util.List<ExpeditionEvent.Type> eligible = ExpeditionEventConfig.eligible(target);
+    rollLoot(expedition);
+    expedition.explorationEvent =
+        ExpeditionEvent.city(eligible.get(game.rnd.nextInt(eligible.size())));
+    expedition.restorePhase(
+        Expedition.State.AWAITING_DECISION,
+        expedition.phaseDurationMinutes,
+        expedition.elapsedMinutes(),
+        expedition.phaseStartMinute);
+    game.addLog(
+        target.name
+            + ": "
+            + ExpeditionEventConfig.title(expedition.explorationEvent.type)
+            + ". Отряд ждёт решения.");
+  }
+
+  void finishExploration(Expedition expedition) {
+    if (expedition.resultGenerated
+        || expedition.state() != Expedition.State.EXPLORING
+        || expedition.remainingMinutes() != 0) return;
+    finalizeResearch(expedition, false);
+  }
+
+  private void finalizeResearch(Expedition expedition, boolean early) {
+    if (expedition.resultGenerated) return;
+    rollLoot(expedition);
+    if (!early)
       for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
-        if (target.lootTable.max(resource) > 0)
-          found.add(resource, Math.max(1, found.get(resource) / 4));
-      event =
-          new ExpeditionEvent(ExpeditionEvent.Type.CACHE, "Найден дополнительный тайник", "", 0);
-    } else
-      event =
-          new ExpeditionEvent(ExpeditionEvent.Type.QUIET, "Исследование прошло спокойно", "", 0);
-    expedition.found = found;
-    expedition.cargo = found.cargo(expedition.capacity());
-    expedition.explorationEvent = event;
+        expedition.found.add(resource, expedition.unsearchedLoot.get(resource));
+    for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
+      expedition.unsearchedLoot.set(resource, 0);
+    expedition.cargo = expedition.found.cargo(expedition.capacity());
     expedition.resultGenerated = true;
+    MapLocation target = location(expedition.locationId);
     expedition.fatigueGain =
-        10 + (expedition.durationMinutes * 2 + ExpeditionConfig.explorationMinutes(target)) / 30;
+        10
+            + (expedition.durationMinutes * 2
+                    + (early ? expedition.elapsedMinutes() : expedition.phaseDurationMinutes))
+                / 30;
     target.setDepletion(target.depletion() + 10);
     target.setState(MapLocation.State.SEARCHED);
     expedition.restorePhase(Expedition.State.AWAITING_RETURN, 1, 1, now());
-    game.addLog("Исследование завершено: " + target.name + ". " + event.message);
+    game.addLog(
+        "Исследование "
+            + (early ? "прекращено" : "завершено")
+            + ": "
+            + target.name
+            + ". "
+            + expedition.explorationEvent.resultMessage());
+  }
+
+  String chooseEvent(String eventId, int action) {
+    Expedition expedition = active();
+    if (expedition == null || expedition.state() != Expedition.State.AWAITING_DECISION)
+      return "Отряд не ждёт решения";
+    ExpeditionEvent event = expedition.explorationEvent;
+    if (!event.interactive() || !event.instanceId.equals(eventId) || event.effectsApplied)
+      return "Решение уже принято или событие изменилось";
+    String[] actions = ExpeditionEventConfig.actions(event.type);
+    if (action < 0 || action >= actions.length) return "Недоступное действие";
+    ExpeditionEventOutcome out = ExpeditionEventResolver.resolve(game, expedition, action);
+    for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values()) {
+      expedition.found.set(resource, expedition.found.get(resource) - out.lost.get(resource));
+      expedition.found.add(resource, out.added.get(resource));
+    }
+    for (java.util.Map.Entry<String, Integer> change : out.healthLoss.entrySet()) {
+      Resident resident = resident(change.getKey());
+      if (resident != null) resident.health = Math.max(1, resident.health - change.getValue());
+    }
+    for (java.util.Map.Entry<String, Integer> change : out.fatigueAdded.entrySet()) {
+      Resident resident = resident(change.getKey());
+      if (resident != null) resident.fatigue = Math.min(100, resident.fatigue + change.getValue());
+    }
+    expedition.explorationDelay += out.delayMinutes;
+    expedition.cityRiskReduction = Math.min(80, expedition.cityRiskReduction + out.riskReduction);
+    expedition.restorePhase(
+        Expedition.State.AWAITING_DECISION,
+        expedition.phaseDurationMinutes + out.delayMinutes,
+        expedition.elapsedMinutes(),
+        expedition.phaseStartMinute);
+    expedition.cargo = expedition.found.cargo(expedition.capacity());
+    event.chosenAction = action;
+    event.outcome = out;
+    event.effectsApplied = true;
+    game.addLog(
+        location(expedition.locationId).name
+            + ": "
+            + actions[action]
+            + ". "
+            + out.message
+            + ". "
+            + outcomeSummary(out));
+    game.save();
+    game.invalidate();
+    return "";
+  }
+
+  String outcomeSummary(ExpeditionEventOutcome out) {
+    String summary = "";
+    for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values()) {
+      if (out.added.get(resource) > 0)
+        summary += resource.label + " +" + out.added.get(resource) + "; ";
+      if (out.lost.get(resource) > 0)
+        summary += resource.label + " -" + out.lost.get(resource) + "; ";
+    }
+    for (java.util.Map.Entry<String, Integer> change : out.healthLoss.entrySet()) {
+      Resident resident = resident(change.getKey());
+      summary +=
+          (resident == null ? "Житель" : resident.name) + ": здоровье -" + change.getValue() + "; ";
+    }
+    for (java.util.Map.Entry<String, Integer> change : out.fatigueAdded.entrySet())
+      if (change.getValue() > 0) {
+        Resident resident = resident(change.getKey());
+        summary +=
+            (resident == null ? "Житель" : resident.name)
+                + ": усталость +"
+                + change.getValue()
+                + "; ";
+      }
+    if (out.delayMinutes > 0) summary += "задержка +" + out.delayMinutes + " мин.; ";
+    return summary;
+  }
+
+  String continueEvent(String eventId) {
+    Expedition expedition = active();
+    if (expedition == null || expedition.state() != Expedition.State.AWAITING_DECISION)
+      return "Отряд не ждёт решения";
+    ExpeditionEvent event = expedition.explorationEvent;
+    if (!event.instanceId.equals(eventId) || !event.effectsApplied || event.continued)
+      return "Сначала выберите действие";
+    event.continued = true;
+    if (event.outcome.retreat) {
+      finalizeResearch(expedition, true);
+      expedition.beginPhase(Expedition.State.RETURNING, expedition.durationMinutes, now());
+      game.addLog("Отряд досрочно возвращается из " + location(expedition.locationId).name + ".");
+    } else
+      expedition.restorePhase(
+          Expedition.State.EXPLORING,
+          expedition.phaseDurationMinutes,
+          expedition.elapsedMinutes(),
+          expedition.phaseStartMinute);
+    game.save();
+    game.invalidate();
+    return "";
   }
 
   String returnHome(String id) {

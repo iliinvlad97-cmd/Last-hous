@@ -98,7 +98,7 @@ final class CityMapController {
   final java.util.LinkedHashSet<String> selectedIds = new java.util.LinkedHashSet<>();
   String message = "";
   int page;
-  boolean expeditionPanel;
+  boolean expeditionPanel, eventPanel;
   float displayProgress;
   int panelScroll, panelLineCount;
   private float dragY, dragStartY;
@@ -108,6 +108,16 @@ final class CityMapController {
   void openPendingReport() {
     Expedition expedition = game.expeditionController.report();
     if (expedition == null) return;
+    if (expedition.state() == Expedition.State.AWAITING_DECISION
+        && expedition.explorationEvent.interactive()) {
+      String key =
+          expedition.explorationEvent.instanceId + expedition.explorationEvent.effectsApplied;
+      if (key.equals(autoReportId)) return;
+      autoReportId = key;
+      closeSelection();
+      eventPanel = true;
+      return;
+    }
     if (expedition.state() != Expedition.State.AWAITING_RETURN
         && expedition.state() != Expedition.State.COMPLETED) return;
     String key = expedition.id + expedition.state();
@@ -118,10 +128,15 @@ final class CityMapController {
   }
 
   boolean scrollTouch(int action, float y, CityMapLayout layout) {
-    boolean panel = expeditionPanel || selected != null;
+    boolean panel = eventPanel || expeditionPanel || selected != null;
+    Expedition current = game.expeditionController.active();
+    float footer =
+        eventPanel && current != null
+            ? new ExpeditionEventLayout(layout, current.explorationEvent).footer
+            : 84;
     if (!panel) return false;
     if (action == android.view.MotionEvent.ACTION_DOWN) {
-      dragging = y >= layout.panelTop + 75 && y <= layout.panelBottom - 84;
+      dragging = y >= layout.panelTop + 75 && y <= layout.panelBottom - footer;
       dragY = dragStartY = y;
       moved = false;
       return true;
@@ -134,7 +149,7 @@ final class CityMapController {
             Math.max(
                 0,
                 Math.min(
-                    Math.max(0, panelLineCount - MapPanelContent.visibleLines(layout)),
+                    Math.max(0, panelLineCount - MapPanelContent.visibleLines(layout, footer)),
                     panelScroll + delta));
         dragY = y;
       }
@@ -169,6 +184,7 @@ final class CityMapController {
     message = "";
     page = 0;
     expeditionPanel = false;
+    eventPanel = false;
     panelScroll = 0;
     panelLineCount = 0;
   }
@@ -194,6 +210,35 @@ final class CityMapController {
 
   TouchResult onTouch(float x, float y, CityMapLayout layout) {
     Expedition active = game.expeditionController.report();
+    if (eventPanel) {
+      Expedition expedition = game.expeditionController.active();
+      if (expedition == null || expedition.state() != Expedition.State.AWAITING_DECISION) {
+        eventPanel = false;
+        return TouchResult.CONSUMED;
+      }
+      ExpeditionEvent event = expedition.explorationEvent;
+      ExpeditionEventLayout eventLayout = new ExpeditionEventLayout(layout, event);
+      int action = eventLayout.hit(x, y);
+      if (action >= 0) {
+        if (event.effectsApplied) {
+          message = game.expeditionController.continueEvent(event.instanceId);
+          if (message.isEmpty()) {
+            eventPanel = false;
+            panelScroll = 0;
+          }
+        } else {
+          message = game.expeditionController.chooseEvent(event.instanceId, action);
+          panelScroll = 0;
+          autoReportId = event.instanceId + event.effectsApplied;
+        }
+      } else if (y < layout.panelTop
+          || y > layout.panelBottom
+          || (x > 350 && y < layout.panelTop + 52)) {
+        eventPanel = false;
+        panelScroll = 0;
+      }
+      return TouchResult.CONSUMED;
+    }
     if (expeditionPanel) {
       Expedition report = game.expeditionController.report();
       if (layout.hitsPreparation(x, y)) {
@@ -274,7 +319,8 @@ final class CityMapController {
       float[] point = ExpeditionConfig.point(target, displayProgress);
       if (layout.hits(x, y, point[0], point[1])
           || (x >= 30 && x <= 390 && y >= layout.bottom - 53 && y <= layout.bottom - 25)) {
-        expeditionPanel = true;
+        if (active.state() == Expedition.State.AWAITING_DECISION) eventPanel = true;
+        else expeditionPanel = true;
         panelScroll = 0;
         return TouchResult.CONSUMED;
       }

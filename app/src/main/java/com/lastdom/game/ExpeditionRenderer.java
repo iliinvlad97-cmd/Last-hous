@@ -113,7 +113,7 @@ final class ExpeditionRenderer {
           "Всего найдено: " + expedition.found.total() + " • Взято: " + expedition.cargo.total());
       if (expedition.found.total() > expedition.cargo.total())
         lines.add("Найдено больше припасов, чем отряд способен унести");
-      lines.add("Событие: " + expedition.explorationEvent.message);
+      lines.add("Событие: " + expedition.explorationEvent.resultMessage());
       lines.add("Истощение: " + target.depletion() + "%");
       if (expedition.state() == Expedition.State.COMPLETED) {
         lines.add("ДОСТАВЛЕНО В УБЕЖИЩЕ");
@@ -131,6 +131,8 @@ final class ExpeditionRenderer {
       lines.add("Прогресс: " + Math.round(expedition.progress() * 100) + "%");
       lines.add("Осталось: " + expedition.remainingMinutes() + " игровых мин.");
       lines.add("Грузоподъёмность: " + expedition.capacity());
+      if (expedition.explorationEvent.interactive() && expedition.explorationEvent.effectsApplied)
+        lines.add("Решение события: " + expedition.explorationEvent.outcome.message);
       if (expedition.state() == Expedition.State.RETURNING)
         lines.add("Везёт припасы: " + expedition.cargo.total());
     }

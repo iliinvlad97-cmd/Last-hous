@@ -109,16 +109,8 @@ public class RegressionProbe {
    double base=risk==MapLocation.Risk.LOW?.05:risk==MapLocation.Risk.LOW_MEDIUM?.10:risk==MapLocation.Risk.MEDIUM?.15:.25;
    close(ExpeditionConfig.negativeProbability(copy,false),base,"base negative probability");close(ExpeditionConfig.negativeProbability(copy,true),base*.85,"guard relative reduction");
   }
-  for(int type=0;type<3;type++){
-   v=fresh(420,840);v.game.rnd=new Fixed(0,type);start(v,"shop",0);until(v,Expedition.State.AWAITING_RETURN);
-   require(e(v).explorationEvent.type==(type==0?ExpeditionEvent.Type.DAMAGED:type==1?ExpeditionEvent.Type.INJURY:ExpeditionEvent.Type.THREAT),"negative event branch");
-   require(v.game.people.get(0).health>0,"injury cannot kill");
-   int health=v.game.people.get(0).health;String event=loot(e(v));v=kill();require(event.equals(loot(e(v)))&&health==v.game.people.get(0).health,"injury/event saved exactly once");
-   for(ExpeditionLoot.Resource resource:ExpeditionLoot.Resource.values())require(e(v).found.get(resource)>=0,"no negative resources");
-  }
-  v=fresh(420,840);v.game.people.get(0).health=1;v.game.rnd=new Fixed(0,1);start(v,"shop",0);until(v,Expedition.State.AWAITING_RETURN);require(v.game.people.get(0).health==1,"near-zero health safe injury");
-  for(int index:new int[]{0,2}){v=fresh(420,840);v.game.rnd=new Fixed(.22,2);start(v,"police",index);until(v,Expedition.State.AWAITING_RETURN);require(e(v).explorationEvent.type==(index==2?ExpeditionEvent.Type.QUIET:ExpeditionEvent.Type.THREAT),"guard changes actual risk outcome");}
-  v=fresh(420,840);v.game.rnd=new Fixed(.99,2){public int nextInt(int b){return b==100?0:super.nextInt(b);}};start(v,"shop",0);until(v,Expedition.State.AWAITING_RETURN);require(e(v).explorationEvent.type==ExpeditionEvent.Type.CACHE,"positive cache event");
+  // Stage 4 replaces automatic Stage 3 event rolls; all interactive branches are covered
+  // by city_event_regression.py. Keep loot, return and legacy-save checks here.
   ExpeditionLoot found=new ExpeditionLoot();for(ExpeditionLoot.Resource r:ExpeditionLoot.Resource.values())found.set(r,15);
   ExpeditionLoot cargo=found.cargo(30);require(cargo.get(ExpeditionLoot.Resource.WATER)==15&&cargo.get(ExpeditionLoot.Resource.FOOD)==15&&cargo.get(ExpeditionLoot.Resource.MEDICINE)==0,"cargo priority order");
   cargo=found.cargo(43);require(cargo.get(ExpeditionLoot.Resource.MEDICINE)==13&&cargo.get(ExpeditionLoot.Resource.MATERIALS)==0,"medicine before materials");
@@ -151,7 +143,7 @@ public class RegressionProbe {
   v=load();require(e(v).state()==Expedition.State.EXPLORING&&e(v).elapsedMinutes()==0&&!e(v).resultGenerated,"Stage 2 arrival migration starts safe exploration");
   require(v.game.expeditionWarehouse.total()==0&&v.game.cityLocations.get(0).depletion()==0,"Stage 2 defaults safe");
   require(v.game.homeRoomFor(v.game.people.get(0))==-1&&Context.preferenceName.equals("save_v02"),"legacy membership/namespace preserved");
-  System.out.println("PASS: "+checks+" loot/return assertions; 1/2/3-member cycles, exactly-once grants, all phase restarts, bonuses, capacity, events/injury, depletion, scrolling and Stage 2 saves.");
+  System.out.println("PASS: "+checks+" loot/return assertions; 1/2/3-member cycles, exactly-once grants, all phase restarts, bonuses, capacity, depletion, scrolling and Stage 2 saves.");
  }
 }
 '''

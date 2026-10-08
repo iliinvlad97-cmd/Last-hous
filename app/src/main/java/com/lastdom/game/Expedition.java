@@ -12,6 +12,7 @@ final class Expedition {
     AT_LOCATION, // Legacy Stage 2 save value; migrated to EXPLORING on load.
     EXPLORING,
     AWAITING_RETURN,
+    AWAITING_DECISION,
     RETURNING,
     COMPLETED,
     FAILED
@@ -32,6 +33,9 @@ final class Expedition {
   ExpeditionEvent explorationEvent =
       new ExpeditionEvent(ExpeditionEvent.Type.QUIET, "Исследование прошло спокойно", "", 0);
   int fatigueGain;
+  boolean cityEventChecked, lootRolled;
+  ExpeditionLoot unsearchedLoot = new ExpeditionLoot();
+  int explorationDelay, cityRiskReduction;
 
   Expedition(
       String locationId,
@@ -84,6 +88,8 @@ final class Expedition {
     switch (state) {
       case EXPLORING:
         return "Исследование";
+      case AWAITING_DECISION:
+        return explorationEvent.effectsApplied ? "Решение принято" : "Ждёт решения";
       case AWAITING_RETURN:
         return "Ожидает возвращения";
       case RETURNING:
