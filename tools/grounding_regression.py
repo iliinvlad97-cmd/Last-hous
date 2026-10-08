@@ -190,6 +190,11 @@ def main():
         # pre-load journal in both versions; the new no-duplication contract has dedicated tests.
         gameplay_probe = gameplay_probe.replace('call(game,"load");require((Integer)get(game,"day")==7',
             '((java.util.List)get(game,"log")).clear();call(game,"load");require((Integer)get(game,"day")==7')
+        # Rest recovery now protects positive-fatigue residents from incident assignments.
+        # Supply fully recovered candidates in the historical incident-response comparison;
+        # rest_recovery_regression.py verifies the new protected-rest behavior exactly.
+        gameplay_probe = gameplay_probe.replace('set(game,"rnd",new FixedRandom(event));call(game,"triggerEvent");',
+            'for(Object person:people())set(person,"fatigue",0);set(game,"rnd",new FixedRandom(event));call(game,"triggerEvent");')
         fixtures.PROBE = gameplay_probe
         baseline = subprocess.check_output(["git", "show", f"{fixtures.BASELINE}:{fixtures.JAVA_PATH}/MainActivity.java"], cwd=root, text=True)
         original = {"com/lastdom/game/MainActivity.java": baseline, "com/lastdom/game/R.java": current["com/lastdom/game/R.java"]}

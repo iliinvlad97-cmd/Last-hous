@@ -315,7 +315,7 @@ class GameController extends GameState {
       if (!s.alive
           || isOnExpedition(s)
           || isBuilding(s)
-          || survivalController.resting(s) && s.autoRecovery
+          || survivalController.protectedRest(s)
           || survivalController.treating(s)
           || s.health <= SurvivalConfig.CRITICAL_HEALTH) continue;
       int v = s.skill * 5 - s.fatigue / 8 + s.health / 12;

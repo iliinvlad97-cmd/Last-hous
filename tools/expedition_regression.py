@@ -72,7 +72,7 @@ public class RegressionProbe {
    require(g.people.get(3).job.equals(fourthJob),"home worker untouched");
    nav(v,0);draw(v);
    require(v.residentRenderer.shelterResidentAt(g.residentX[0],g.residentY[0]-20)!=0,"away not selectable in home");
-   require(g.findBestResident("Инженер","")>=3,"AI excludes participants");
+   g.people.get(3).job="Материалы";g.people.get(4).job="Ремонт";require(g.findBestResident("Инженер","")>=3,"AI excludes participants and chooses a working resident");
    g.people.get(3).job="Материалы";g.people.get(4).job="Ремонт";
    int health=g.people.get(0).health,fatigue=g.people.get(0).fatigue;g.processJobs();
    require(g.mats>mats,"remaining worker produces");require(g.people.get(0).health==health&&g.people.get(0).fatigue==fatigue,"away not processed as home worker");

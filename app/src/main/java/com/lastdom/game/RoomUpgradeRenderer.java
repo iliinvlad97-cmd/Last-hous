@@ -44,8 +44,8 @@ final class RoomUpgradeRenderer {
     lines.add(
         RoomUpgradeConfig.effect(room)
             + ": "
-            + game.roomUpgradeController.percent(room)
-            + "% от базовой");
+            + effectValue(room, game.roomLevels[room])
+            + (room == 5 ? "" : " от базовой"));
     lines.add((room == 5 ? "Отдыхают: " : "Работают: ") + game.occupants(room));
     for (Resident resident : game.people)
       if (game.homeRoomFor(resident) == room && game.survivalController.working(resident))
@@ -70,7 +70,7 @@ final class RoomUpgradeRenderer {
               + " игровых минут ("
               + game.formatBuild(active.remaining())
               + ")");
-      lines.add("После завершения: " + RoomUpgradeConfig.percent(room, active.targetLevel) + "%");
+      lines.add("После завершения: " + effectValue(room, active.targetLevel));
       lines.add("Материалы уже списаны. Строительство идёт по игровому времени.");
     } else if (game.roomLevels[room] < 3) {
       int target = game.roomLevels[room] + 1,
@@ -78,10 +78,10 @@ final class RoomUpgradeRenderer {
           minutes = RoomUpgradeConfig.minutes(room, target);
       lines.add(
           "После улучшения: "
-              + RoomUpgradeConfig.percent(room, target)
-              + "% (+"
-              + (RoomUpgradeConfig.percent(room, target) - 100)
-              + "% к базе)");
+              + effectValue(room, target)
+              + (room == 5
+                  ? ""
+                  : " (+" + (RoomUpgradeConfig.percent(room, target) - 100) + "% к базе)"));
       lines.add("Стоимость: " + cost + " материалов • доступно: " + game.mats);
       lines.add("Время: " + minutes + " игровых минут (" + game.formatBuild(minutes) + ")");
       if (game.mats < cost) lines.add("Не хватает материалов: " + (cost - game.mats));
@@ -108,6 +108,12 @@ final class RoomUpgradeRenderer {
     button(c, 30, layout.actionTop, 390, 48, button, blocked.isEmpty());
     button(c, 30, layout.secondaryTop, 206, 43, "НАЗНАЧИТЬ", false);
     button(c, 214, layout.secondaryTop, 390, 43, "ЗАКРЫТЬ", false);
+  }
+
+  private String effectValue(int room, int level) {
+    return room == 5
+        ? SurvivalConfig.bedroomRecoveryPerHour(level) + " пунктов за игровой час"
+        : RoomUpgradeConfig.percent(room, level) + "%";
   }
 
   private void drawBuilders(Canvas c, RoomUpgradeLayout layout) {

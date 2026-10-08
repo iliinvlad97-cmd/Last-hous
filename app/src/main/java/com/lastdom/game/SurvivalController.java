@@ -32,6 +32,15 @@ final class SurvivalController {
     return !game.isOnExpedition(r) && !game.isBuilding(r) && r.job.equals("Отдых");
   }
 
+  boolean protectedRest(Resident r) {
+    return resting(r) && (r.autoRecovery || !restComplete(r));
+  }
+
+  private boolean restComplete(Resident r) {
+    return r.fatigue <= SurvivalConfig.REST_FINISH
+        && r.survivalFractions.getOrDefault("fatigue", 0) <= 0;
+  }
+
   boolean treating(Resident r) {
     return !game.isOnExpedition(r) && !game.isBuilding(r) && r.job.equals("Лечится");
   }
@@ -87,7 +96,7 @@ final class SurvivalController {
       r.job = "Отдых";
     } else if (resting(r)
         && r.autoRecovery
-        && r.fatigue <= SurvivalConfig.REST_FINISH
+        && restComplete(r)
         && r.health >= SurvivalConfig.TREAT_START) {
       r.job = r.resumeJob.isEmpty() ? "Отдых" : r.resumeJob;
       r.autoRecovery = false;
@@ -141,11 +150,17 @@ final class SurvivalController {
       if (fed) r.foodMinutes--;
       if (watered) r.waterMinutes--;
       boolean rest = resting(r), treatment = treating(r);
-      int fatigueRate =
-          rest || treatment
-              ? -SurvivalConfig.REST_PER_DAY * (rest ? game.roomUpgradeController.percent(5) : 100)
-              : SurvivalConfig.WORK_FATIGUE_PER_DAY * 100;
-      change(r, "fatigue", fatigueRate);
+      if (rest)
+        change(
+            r, "fatigue", -SurvivalConfig.bedroomRecoveryPerHour(game.roomLevels[5]) * 2400, true);
+      else
+        change(
+            r,
+            "fatigue",
+            (treatment
+                    ? -SurvivalConfig.TREATMENT_REST_PER_DAY
+                    : SurvivalConfig.WORK_FATIGUE_PER_DAY)
+                * 100);
       int moraleRate = 0;
       if (r.hunger >= SurvivalConfig.NEED_HEAVY) moraleRate -= SurvivalConfig.BAD_MORALE_PER_DAY;
       if (r.thirst >= SurvivalConfig.NEED_HEAVY) moraleRate -= SurvivalConfig.BAD_MORALE_PER_DAY;
@@ -224,9 +239,17 @@ final class SurvivalController {
   }
 
   private void change(Resident r, String key, int dailyHundredths) {
+    change(r, key, dailyHundredths, false);
+  }
+
+  private void change(Resident r, String key, int dailyHundredths, boolean roundedRest) {
     long value = r.survivalFractions.getOrDefault(key, 0) + (long) dailyHundredths;
-    int delta = (int) (value / NEED_DENOMINATOR);
-    int remainder = (int) (value % NEED_DENOMINATOR);
+    int delta =
+        roundedRest
+            // Preserve legacy positive carry without making displayed fatigue rise during rest.
+            ? Math.min(0, (int) Math.round(value / (double) NEED_DENOMINATOR))
+            : (int) (value / NEED_DENOMINATOR);
+    int remainder = (int) (value - (long) delta * NEED_DENOMINATOR);
     int before =
         key.equals("hunger")
             ? r.hunger
@@ -235,7 +258,9 @@ final class SurvivalController {
                 : key.equals("fatigue") ? r.fatigue : key.equals("morale") ? r.morale : r.health;
     int after = SurvivalConfig.clamp(before + delta);
     // Do not bank growth/recovery beyond a bound for later use.
-    if (after == 0 && remainder < 0 || after == 100 && remainder > 0) remainder = 0;
+    if (after == 0 && remainder < 0
+        || after == 100 && remainder > 0
+        || roundedRest && before + delta < 0) remainder = 0;
     r.survivalFractions.put(key, remainder);
     switch (key) {
       case "hunger":

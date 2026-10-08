@@ -24,6 +24,7 @@ final class RoomUpgradeController {
     if (!resident.alive || resident.health <= 0) return "Нет здоровья";
     if (game.isOnExpedition(resident)) return "В экспедиции";
     if (game.isBuilding(resident)) return "Занят строительством";
+    if (game.survivalController.protectedRest(resident)) return "Восстанавливает силы в спальне";
     return "";
   }
 

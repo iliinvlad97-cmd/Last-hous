@@ -68,7 +68,7 @@ public class RegressionProbe {
  static void recovery(){
   for(int level=1;level<=3;level++){
    GameView v=fresh();Resident r=only(v);r.fatigue=100;r.job="Отдых";v.game.roomLevels[5]=level;v.game.food=v.game.water=100;
-   minutes(v,1440);require(100-r.fatigue==22*RoomUpgradeConfig.percent(5,level)/100,"bedroom minute recovery/room bonus "+level);v.game.save();int fatigue=r.fatigue;v=kill();r=v.game.people.get(0);require(r.fatigue==fatigue&&r.job.equals("Отдых"),"rest state reload");
+   minutes(v,60);require(100-r.fatigue==new int[]{5,7,10}[level-1],"bedroom hourly recovery/room bonus "+level);v.game.save();int fatigue=r.fatigue;v=kill();r=v.game.people.get(0);require(r.fatigue==fatigue&&r.job.equals("Отдых"),"rest state reload");
    v=fresh();for(int i=2;i<5;i++)v.game.people.get(i).alive=false;r=v.game.people.get(0);Resident doctor=v.game.people.get(1);r.health=40;r.job="Вода";doctor.job="Лечение";doctor.fatigue=0;v.game.food=v.game.water=100;v.game.roomLevels[2]=level;
    minutes(v,1440);require(r.health-40==2*RoomUpgradeConfig.percent(2,level)/100,"existing base2 healing, room bonus "+level);
    doctor.job="Отдых";int health=r.health;minutes(v,1440);require(r.health==health,"no staff no medical healing for worker");
@@ -79,7 +79,7 @@ public class RegressionProbe {
   v.game.people.get(1).job="Отдых";minutes(v,1);require(r.job.equals("Отдых")&&r.autoRecovery,"missing doctor falls back to bedroom, no recovery deadlock");int health=r.health;minutes(v,1440);require(r.health>health,"injured resident still recovers without medical staff");
  }
  static void builderAndExpedition(){
-  GameView v=fresh();v.game.mats=100;Resident builder=v.game.people.get(0),worker=v.game.people.get(4);worker.job="Ремонт";
+  GameView v=fresh();v.game.mats=100;Resident builder=v.game.people.get(0),worker=v.game.people.get(4);worker.job="Ремонт";builder.fatigue=0;
   require(v.game.roomUpgradeController.start(0,builder.id).isEmpty(),"construction start");require(v.game.occupants(0).equals("Павел"),"builder absent from normal worker list");
   v.roomUpgradePanel.open(0);Canvas c=draw(v);text(c,"Работают: Павел");text(c,"Строитель: Иван");
   require(!v.game.survivalController.working(builder)&&v.game.homeRoomFor(builder)==0,"builder visible at build room but no output");
