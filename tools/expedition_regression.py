@@ -74,7 +74,7 @@ public class RegressionProbe {
    g.people.get(3).job="Материалы";g.people.get(4).job="Ремонт";
    int health=g.people.get(0).health,fatigue=g.people.get(0).fatigue;g.processJobs();
    require(g.mats>mats,"remaining worker produces");require(g.people.get(0).health==health&&g.people.get(0).fatigue==fatigue,"away not processed as home worker");
-   g.mats=mats;
+   g.mats=mats;power=g.power; // processJobs now also runs the Stage 5 generator.
    g.people.get(3).job="Отдых";g.people.get(4).job="Отдых";
    nav(v,3);text(draw(v),"В экспедиции");g.selected=0;g.overlay=1;draw(v);
    float top=Math.max(285,logicalHeight-405);tap(v,180,top+230);require(!g.jobMenu,"away assignment menu blocked");
@@ -146,7 +146,7 @@ public class RegressionProbe {
   }
   View.width=420;View.height=840;Context.preferences=new MemoryPreferences();
   Context.preferences.edit().putInt("day",7).putInt("count",1).putString("p0_name","Старый житель").putInt("room0",3).apply();
-  v=loaded();require(Context.preferenceName.equals("save_v02")&&v.game.day==7&&v.game.people.size()==1&&v.game.roomLevels[0]==3,"legacy missing keys safe");
+  v=loaded();require(Context.preferenceName.equals("save_v02")&&v.game.day==7&&v.game.people.size()==1&&v.game.roomLevels[0]==1,"old pre-Stage5 levels migrate to baseline1");
   require(v.game.expeditions.isEmpty()&&v.game.people.get(0).id.equals("legacy-0"),"legacy stable ID default");
   require(v.game.expeditionController.start("shop",ids(v,0)).isEmpty(),"legacy resident can launch");save(v);String id=v.game.people.get(0).id;
   v=loaded();require(v.game.people.get(0).id.equals(id),"legacy identity stable after restart");

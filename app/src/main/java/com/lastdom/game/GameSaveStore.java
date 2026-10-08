@@ -3,7 +3,7 @@ package com.lastdom.game;
 import android.content.SharedPreferences;
 import java.util.Arrays;
 
-/** Legacy save_v02 serialization. Keys, defaults, ordering and apply semantics remain unchanged. */
+/** Legacy save_v02 keys retained; durable snapshots cover expedition and upgrade transactions. */
 final class GameSaveStore {
 
   private final SharedPreferences sp;
@@ -119,12 +119,17 @@ final class GameSaveStore {
     }
     for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
       e.putInt("exp_store_" + resource.name(), game.expeditionWarehouse.get(resource));
-    if (game.expeditions.isEmpty()) e.apply();
-    else if (!e.commit()) throw new IllegalStateException("Не удалось сохранить экспедицию");
+    saveUpgrades(game, e);
+    boolean fractional =
+        game.productionRemainders.values.values().stream().anyMatch(value -> value != 0);
+    if (game.expeditions.isEmpty() && game.roomUpgrades.isEmpty() && !fractional) e.apply();
+    else if (!e.commit()) throw new IllegalStateException("Не удалось сохранить игру");
   }
 
   void load(GameController game) {
     game.expeditions.clear();
+    game.roomUpgrades.clear();
+    game.productionRemainders.values.clear();
     for (MapLocation location : game.cityLocations) {
       location.setDepletion(sp.getInt("map_" + location.id + "_depletion", 0));
       try {
@@ -168,7 +173,8 @@ final class GameSaveStore {
           sp.getBoolean("locSeen" + i, game.locations.get(i).discovered);
     }
     for (int i = 0; i < 6; i++) {
-      game.roomLevels[i] = sp.getInt("room" + i, 1);
+      game.roomLevels[i] =
+          sp.contains("upgrade5_schema") ? Math.max(1, Math.min(3, sp.getInt("room" + i, 1))) : 1;
       game.roomCondition[i] = sp.getInt("roomCond" + i, 100);
     }
     java.util.Set<String> residentIds = new java.util.HashSet<>();
@@ -205,6 +211,132 @@ final class GameSaveStore {
                 game.expeditionController.location(expedition.locationId)),
             game.expeditionController.now());
     game.expeditionController.restoreMembership();
+    loadUpgrades(game);
+  }
+
+  private void saveUpgrades(GameController game, SharedPreferences.Editor editor) {
+    editor
+        .putInt("upgrade5_schema", 1)
+        .putInt("upgrade5_count", game.roomUpgrades.size())
+        .putInt("upgrade5_defense", game.roomUpgradeController.percent(4));
+    for (int i = 0; i < game.roomUpgrades.size(); i++) {
+      RoomUpgradeTask task = game.roomUpgrades.get(i);
+      String key = "upgrade5_" + i + "_";
+      editor
+          .putString(key + "id", task.id)
+          .putInt(key + "room", task.room)
+          .putInt(key + "target", task.targetLevel)
+          .putString(key + "builder", task.builderId)
+          .putString(key + "start", Long.toString(task.startMinute))
+          .putInt(key + "duration", task.duration)
+          .putInt(key + "elapsed", task.elapsed)
+          .putInt(key + "cost", task.paidCost)
+          .putBoolean(key + "paid", task.costPaid)
+          .putBoolean(key + "completed", task.completed)
+          .putBoolean(key + "legacy", task.legacy);
+    }
+    for (String channel : ProductionRemainders.GLOBAL)
+      editor.putInt(
+          "upgrade5_fraction_" + channel,
+          game.productionRemainders.values.getOrDefault(channel, 0));
+    for (Resident resident : game.people)
+      for (String kind : new String[] {"heal_", "rest_"}) {
+        String channel = kind + resident.id;
+        editor.putInt(
+            "upgrade5_fraction_" + channel,
+            game.productionRemainders.values.getOrDefault(channel, 0));
+      }
+  }
+
+  private void loadUpgrades(GameController game) {
+    if (!sp.contains("upgrade5_schema")) {
+      // Previously paid, builderless construction must not charge again or disappear on update.
+      int room = sp.getInt("buildingRoom", -1), remaining = sp.getInt("buildRemaining", 0);
+      if (RoomUpgradeConfig.valid(room) && remaining > 0) {
+        String builder = "";
+        for (Resident resident : game.people)
+          if (game.roomUpgradeController.unavailableReason(resident).isEmpty()) {
+            builder = resident.id;
+            break;
+          }
+        int oldDuration = Math.max(remaining, 120 + Math.max(1, sp.getInt("room" + room, 1)) * 90);
+        game.roomUpgrades.add(
+            new RoomUpgradeTask(
+                "legacy-build-" + room + "-" + game.day,
+                room,
+                2,
+                builder,
+                Math.max(0, game.expeditionController.now() - (oldDuration - remaining)),
+                oldDuration,
+                0,
+                true,
+                true,
+                oldDuration - remaining,
+                false));
+      }
+    } else {
+      java.util.Set<String> ids = new java.util.HashSet<>();
+      boolean active = false;
+      int count = Math.max(0, Math.min(100, sp.getInt("upgrade5_count", 0)));
+      for (int i = 0; i < count; i++) {
+        String key = "upgrade5_" + i + "_";
+        try {
+          String id = sp.getString(key + "id", ""), builder = sp.getString(key + "builder", "");
+          int room = sp.getInt(key + "room", -1),
+              target = sp.getInt(key + "target", 0),
+              duration = sp.getInt(key + "duration", 0),
+              elapsed = sp.getInt(key + "elapsed", -1),
+              cost = sp.getInt(key + "cost", -1);
+          long start = Long.parseLong(sp.getString(key + "start", "-1"));
+          boolean completed = sp.getBoolean(key + "completed", false),
+              paid = sp.getBoolean(key + "paid", false),
+              legacy = sp.getBoolean(key + "legacy", false);
+          if (id.isEmpty()
+              || ids.contains(id)
+              || !RoomUpgradeConfig.valid(room)
+              || target < 2
+              || target > 3
+              || duration < 1
+              || elapsed < 0
+              || elapsed > duration
+              || cost < 0
+              || start < 0
+              || !paid) throw new IllegalArgumentException();
+          if (!legacy
+              && (cost != RoomUpgradeConfig.cost(room, target)
+                  || duration != RoomUpgradeConfig.minutes(room, target)))
+            throw new IllegalArgumentException();
+          Resident resident = game.expeditionController.resident(builder);
+          if (completed) {
+            if (elapsed != duration || game.roomLevels[room] < target)
+              throw new IllegalArgumentException();
+          } else {
+            if (active
+                || game.roomLevels[room] != target - 1
+                || (!legacy && resident == null)
+                || (resident != null && game.isOnExpedition(resident)))
+              throw new IllegalArgumentException();
+          }
+          game.roomUpgrades.add(
+              new RoomUpgradeTask(
+                  id, room, target, builder, start, duration, cost, paid, legacy, elapsed,
+                  completed));
+          ids.add(id);
+          if (!completed) active = true;
+        } catch (IllegalArgumentException exception) {
+          // Invalid tasks cannot spend materials, grant a level or overwrite expedition membership.
+        }
+      }
+      for (String channel : ProductionRemainders.GLOBAL) loadFraction(game, channel);
+      for (Resident resident : game.people)
+        for (String kind : new String[] {"heal_", "rest_"}) loadFraction(game, kind + resident.id);
+    }
+    game.roomUpgradeController.restoreMembership();
+  }
+
+  private void loadFraction(GameController game, String channel) {
+    game.productionRemainders.values.put(
+        channel, Math.max(0, Math.min(99, sp.getInt("upgrade5_fraction_" + channel, 0))));
   }
 
   private void loadExpeditions(GameController game) {

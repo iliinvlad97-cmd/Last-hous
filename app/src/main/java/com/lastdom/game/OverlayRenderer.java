@@ -41,11 +41,13 @@ final class OverlayRenderer {
     view.txt(c, "Голод " + s.hunger + "%", 34, top + 158, 10, view.muted);
     view.txt(c, "Усталость " + s.fatigue + "%", 190, top + 158, 10, view.muted);
     view.txt(c, "Мораль " + s.morale + "%", 34, top + 184, 10, view.muted);
-    boolean away = view.game.isOnExpedition(s);
+    boolean away = view.game.isOnExpedition(s) || view.game.isBuilding(s);
     view.box(c, 34, top + 211, 386, top + 257, away ? view.panel2 : view.accent, 11);
     view.bold(
         c,
-        away ? "В ЭКСПЕДИЦИИ" : "СМЕНИТЬ РАБОТУ",
+        away
+            ? (view.game.isBuilding(s) ? "ЗАНЯТ СТРОИТЕЛЬСТВОМ" : "В ЭКСПЕДИЦИИ")
+            : "СМЕНИТЬ РАБОТУ",
         116,
         top + 240,
         11,
@@ -57,48 +59,7 @@ final class OverlayRenderer {
   }
 
   void drawRoomOverlay(Canvas c) {
-    if (view.game.selectedRoom < 0 || view.game.selectedRoom >= 6) return;
-    int i = view.game.selectedRoom;
-    dimForOverlay(c);
-    float hh = view.H / view.scale, top = Math.max(300, hh - 390);
-    view.box(c, 18, top, 402, hh - 78, Color.rgb(25, 29, 33), 18);
-    view.bold(c, "×", 372, top + 31, 22, view.muted);
-    view.bold(c, view.game.rooms[i], 34, top + 37, 18, view.text);
-    view.txt(
-        c,
-        "Уровень " + view.game.roomLevels[i] + " • состояние " + view.game.roomCondition[i] + "%",
-        34,
-        top + 58,
-        10,
-        view.game.roomCondition[i] < 40 ? view.danger : view.muted);
-    view.bar(
-        c,
-        34,
-        top + 73,
-        386,
-        8,
-        view.game.roomCondition[i],
-        view.game.roomCondition[i] < 40 ? view.danger : view.good);
-    view.txt(c, "Работают: " + view.game.occupants(i), 34, top + 111, 11, view.text);
-    view.wrap(c, view.game.roomBonus(i), 34, top + 139, 386, 10, view.muted, 15);
-    int cost = 6 + view.game.roomLevels[i] * 4;
-    if (view.game.buildingRoom == i) {
-      view.box(c, 34, top + 202, 386, top + 250, view.panel2, 11);
-      view.bold(
-          c,
-          "СТРОИТСЯ • " + view.game.formatBuild(view.game.buildRemaining),
-          75,
-          top + 232,
-          11,
-          view.good);
-    } else {
-      view.box(c, 34, top + 202, 386, top + 250, view.accent, 11);
-      view.bold(c, "УЛУЧШИТЬ • " + cost + " МАТ.", 94, top + 232, 11, Color.rgb(30, 27, 23));
-    }
-    view.box(c, 34, top + 259, 206, top + 302, view.panel2, 10);
-    view.bold(c, "НАЗНАЧИТЬ", 70, top + 286, 9, view.text);
-    view.box(c, 214, top + 259, 386, top + 302, view.panel2, 10);
-    view.bold(c, "ЗАКРЫТЬ", 264, top + 286, 10, view.text);
+    view.roomUpgradeRenderer.draw(c);
   }
 
   void drawResidentsOverlay(Canvas c) {
@@ -135,44 +96,7 @@ final class OverlayRenderer {
   }
 
   void drawRoomDetail(Canvas c) {
-    int i = view.game.selectedRoom;
-    view.hudRenderer.drawHeader(c, view.game.rooms[i] + " • уровень " + view.game.roomLevels[i]);
-    view.box(c, 20, 72, 400, 310, view.panel, 16);
-    if (view.shelterBitmap != null) {
-      int sw = view.shelterBitmap.getWidth(), sh = view.shelterBitmap.getHeight();
-      int col = i % 2, row = i / 2;
-      int sx0 = col == 0 ? 10 : 425, sx1 = col == 0 ? 420 : 842;
-      int sy0 = (i / 2 == 0 ? 85 : (i / 2 == 1 ? 350 : 610)), sy1 = Math.min(sh, sy0 + 255);
-      Rect src = new Rect(sx0, sy0, sx1, sy1);
-      RectF dst = new RectF(view.sy(28), view.sy(82), view.sy(392), view.sy(300));
-      c.drawBitmap(view.shelterBitmap, src, dst, view.p);
-    }
-    view.bold(c, "СОСТОЯНИЕ", 24, 340, 12, view.muted);
-    view.bar(
-        c,
-        24,
-        350,
-        396,
-        10,
-        view.game.roomCondition[i],
-        view.game.roomCondition[i] < 40 ? view.danger : view.good);
-    view.txt(c, "Работают: " + view.game.occupants(i), 24, 390, 12, view.text);
-    view.txt(c, "Назначение: " + view.game.roomJobs[i], 24, 414, 11, view.muted);
-    view.wrap(c, view.game.roomBonus(i), 24, 447, 396, 11, view.muted, 17);
-    int cost = 6 + view.game.roomLevels[i] * 4, time = 120 + view.game.roomLevels[i] * 90;
-    if (view.game.buildingRoom == i) {
-      view.box(c, 24, 505, 396, 563, view.panel2, 12);
-      view.bold(c, "УЛУЧШЕНИЕ ИДЁТ", 42, 529, 12, view.good);
-      view.txt(
-          c, "Осталось " + view.game.formatBuild(view.game.buildRemaining), 42, 550, 11, view.text);
-    } else {
-      view.box(c, 24, 505, 396, 563, view.accent, 12);
-      view.bold(c, "УЛУЧШИТЬ • " + cost + " МАТ.", 42, 529, 12, Color.rgb(30, 27, 23));
-      view.txt(c, "Время: " + view.game.formatBuild(time), 42, 550, 10, Color.rgb(50, 42, 34));
-    }
-    view.box(c, 24, 577, 396, 629, view.panel2, 12);
-    view.bold(c, "НАЗНАЧИТЬ ЖИТЕЛЯ", 42, 609, 12, view.text);
-    view.hudRenderer.bottomBack(c);
+    view.roomUpgradeRenderer.draw(c);
   }
 
   void drawMap(Canvas c) {

@@ -4,7 +4,8 @@ package com.lastdom.game;
 final class Resident {
   enum Status {
     HOME,
-    ON_EXPEDITION
+    ON_EXPEDITION,
+    BUILDING
   }
 
   Status status = Status.HOME;

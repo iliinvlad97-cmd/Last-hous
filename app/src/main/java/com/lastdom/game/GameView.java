@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v0.9.7 • CITY EVENTS • STAGE 4";
+  static final String VERSION_LABEL = "v0.9.8 • SHELTER UPGRADES • STAGE 5";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -45,6 +45,8 @@ public final class GameView extends View {
   final HudRenderer hudRenderer = new HudRenderer(this);
   final OverlayRenderer overlayRenderer = new OverlayRenderer(this);
   final CityMapController cityMap;
+  final RoomUpgradePanelController roomUpgradePanel;
+  final RoomUpgradeRenderer roomUpgradeRenderer = new RoomUpgradeRenderer(this);
   final CityMapRenderer cityMapRenderer = new CityMapRenderer(this);
   final ExpeditionRenderer expeditionRenderer = new ExpeditionRenderer(this);
   final ExpeditionEventRenderer expeditionEventRenderer = new ExpeditionEventRenderer(this);
@@ -57,6 +59,7 @@ public final class GameView extends View {
     fullSceneBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.shelter_full_scene);
     game = new GameController(context.getSharedPreferences("save_v02", 0), this::invalidate);
     cityMap = new CityMapController(game);
+    roomUpgradePanel = new RoomUpgradePanelController(game);
     Expedition restored = game.expeditionController.active();
     if (restored != null && restored.state() == Expedition.State.AWAITING_DECISION)
       cityMap.openPendingReport();
@@ -186,6 +189,18 @@ public final class GameView extends View {
 
   @Override
   public boolean onTouchEvent(MotionEvent e) {
+    if ((game.screen == HOME && game.overlay == 2 || game.screen == 4)
+        && !game.event
+        && !game.gameOver
+        && !game.jobMenu
+        && !cityMap.eventPanel
+        && !cityMap.expeditionPanel) {
+      RoomUpgradeLayout layout = new RoomUpgradeLayout(H / scale);
+      if (roomUpgradePanel.scrollTouch(e.getAction(), e.getY() / scale, layout)) {
+        invalidate();
+        return true;
+      }
+    }
     if ((game.screen == CITY_MAP || cityMap.expeditionPanel || cityMap.eventPanel)
         && !game.event
         && !game.gameOver
@@ -230,6 +245,11 @@ public final class GameView extends View {
       invalidate();
       return true;
     }
+    if (game.screen == HOME && game.overlay == 2 || game.screen == 4) {
+      roomUpgradePanel.touch(x, y, new RoomUpgradeLayout(hh));
+      invalidate();
+      return true;
+    }
     if (game.screen == 0 && game.overlay != 0) {
       float top =
           (game.overlay == 3
@@ -242,7 +262,8 @@ public final class GameView extends View {
       }
       if (game.overlay == 1) {
         if (y >= top + 211 && y <= top + 257) {
-          if (game.isOnExpedition(game.people.get(game.selected))) return true;
+          if (game.isOnExpedition(game.people.get(game.selected))
+              || game.isBuilding(game.people.get(game.selected))) return true;
           game.jobMenu = true;
           invalidate();
           return true;
@@ -254,31 +275,6 @@ public final class GameView extends View {
           return true;
         }
         if (y >= top + 266 && y <= top + 309 && x >= 210) {
-          game.overlay = 0;
-          invalidate();
-          return true;
-        }
-      } else if (game.overlay == 2) {
-        if (y >= top + 202 && y <= top + 250) {
-          game.startUpgrade(game.selectedRoom);
-          invalidate();
-          return true;
-        }
-        if (y >= top + 259 && y <= top + 302 && x < 210) {
-          int idx = -1;
-          for (int i = 0; i < game.people.size(); i++)
-            if (game.people.get(i).alive && !game.isOnExpedition(game.people.get(i))) {
-              idx = i;
-              break;
-            }
-          if (idx >= 0) {
-            game.selected = idx;
-            game.jobMenu = true;
-          }
-          invalidate();
-          return true;
-        }
-        if (y >= top + 259 && y <= top + 302 && x >= 210) {
           game.overlay = 0;
           invalidate();
           return true;
@@ -311,8 +307,7 @@ public final class GameView extends View {
       }
       int ri = ShelterGeometry.fullSceneRoomAt(x, y, sceneTop, sceneBottom);
       if (ri >= 0) {
-        game.selectedRoom = ri;
-        game.overlay = 2;
+        roomUpgradePanel.open(ri);
         invalidate();
         return true;
       }

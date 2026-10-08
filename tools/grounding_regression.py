@@ -158,9 +158,18 @@ def main():
         gameplay_probe = gameplay_probe.replace('call(game,"startExpedition",0);', '')
         gameplay_probe = gameplay_probe.replace('if(!f.isSynthetic()){',
             'if(!f.isSynthetic()&&!f.getName().equals("id")&&!f.getName().equals("status")){')
+        # Stage 5 intentionally replaces the builderless upgrade and adds generator output.
+        # Dedicated shelter_upgrade_regression.py verifies the new costs/time/economy exactly.
+        # Retain the original baseline for unrelated simulation, repairs, consumption and events.
+        gameplay_probe = "\n".join(line for line in gameplay_probe.split("\n")
+                                    if not line.strip().startswith('fresh();set(game,"mats",100);call(game,"startUpgrade",3);'))
+        gameplay_probe = gameplay_probe.replace('  ((int[])get(game,"roomCondition"))[0]=40;', '  fresh();set(game,"mats",100);((int[])get(game,"roomCondition"))[0]=40;')
+        gameplay_probe = gameplay_probe.replace('call(game,"startUpgrade",2);', '')
+        gameplay_probe = gameplay_probe.replace('water power mats', 'water mats')
+        gameplay_probe = gameplay_probe.replace('tap(100,700);require((Integer)get(game,"overlay")==2&&(Integer)get(game,"screen")==0,"overlay blocks background");tap(300,750);require((Integer)get(game,"overlay")==0,"overlay close");', 'set(game,"overlay",0);')
         gameplay_probe = gameplay_probe.replace('state.put("saved",Context.preferences.values.toString());',
             'TreeMap<String,Object> legacy=new TreeMap<>(Context.preferences.values);'
-            'legacy.keySet().removeIf(k->k.startsWith("exp2_")||k.startsWith("exp3_")||k.startsWith("exp_store_")||k.startsWith("map_")||k.matches("p[0-9]+_id"));'
+            'legacy.keySet().removeIf(k->k.equals("power")||k.startsWith("upgrade5_")||k.startsWith("exp2_")||k.startsWith("exp3_")||k.startsWith("exp_store_")||k.startsWith("map_")||k.matches("p[0-9]+_id"));'
             'state.put("saved",legacy.toString());')
         fixtures.PROBE = gameplay_probe
         baseline = subprocess.check_output(["git", "show", f"{fixtures.BASELINE}:{fixtures.JAVA_PATH}/MainActivity.java"], cwd=root, text=True)

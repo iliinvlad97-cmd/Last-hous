@@ -116,6 +116,7 @@ final class ResidentRenderer {
         && view.game.residentVisualReady
         && initialized[i]
         && view.game.residentVisualRoom[i] != ri) return "Идёт: " + view.game.rooms[ri];
+    if (view.game.isBuilding(s)) return "Строит: " + (ri < 0 ? "назначен" : view.game.rooms[ri]);
     if (s.health < 45) return "Ранен • " + s.job;
     if (s.fatigue > 82) return "Измотан • " + s.job;
     if (s.job.equals("Отдых")) return "Отдыхает";
