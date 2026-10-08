@@ -35,6 +35,11 @@ final class ExpeditionRenderer {
     boolean recon = expedition.type == Expedition.Type.RECON;
     int color = recon ? view.blue : view.accent;
     float row = layout.expeditionRow(expedition.type);
+    boolean parallel =
+        view.game.expeditionController.active(Expedition.Type.LOOT) != null
+            && view.game.expeditionController.active(Expedition.Type.RECON) != null;
+    float left = layout.expeditionLeft(expedition.type, parallel),
+        right = layout.expeditionRight(expedition.type, parallel);
     MapLocation target = view.game.expeditionController.location(expedition.locationId);
     if (displayed[index] != expedition || displayedState[index] != expedition.state()) {
       displayed[index] = expedition;
@@ -68,23 +73,22 @@ final class ExpeditionRenderer {
     paint.setColor(color);
     c.drawCircle(view.sy(x), view.sy(y), view.sy(10), paint);
     view.bold(c, recon ? "Р" : "О", x - 4, y + 4, 11, view.bg);
-    view.box(c, 30, row, 390, row + 28, view.panel2, 8);
-    view.txt(
-        c,
-        (recon
-                ? "Разведка • " + expedition.phaseLabel()
-                : expedition.state() == Expedition.State.EXPLORING
-                    ? "Отряд прибыл • Исследование"
-                    : expedition.phaseLabel())
-            + " • "
-            + Math.round(expedition.progress() * 100)
-            + "% • "
-            + expedition.remainingMinutes()
-            + " мин.",
-        42,
-        row + 18,
-        10,
-        color);
+    view.box(c, left, row, right, row + 28, view.panel2, 8);
+    String label =
+        recon
+            ? (expedition.state() == Expedition.State.EXPLORING
+                ? "Разведка района"
+                : "Разведка • " + expedition.phaseLabel())
+            : (expedition.state() == Expedition.State.EXPLORING
+                ? "Отряд прибыл • Исследование"
+                : expedition.phaseLabel());
+    String progressText =
+        Math.round(expedition.progress() * 100) + "% • " + expedition.remainingMinutes() + " мин.";
+    if (parallel) {
+      view.txt(
+          c, recon ? label : "Экспед. • " + expedition.phaseLabel(), left + 8, row + 11, 9, color);
+      view.txt(c, progressText, left + 8, row + 23, 9, color);
+    } else view.txt(c, label + " • " + progressText, left + 12, row + 18, 10, color);
   }
 
   void drawPanel(Canvas c, CityMapLayout layout) {

@@ -13,7 +13,15 @@ final class CityMapLayout {
   }
 
   float expeditionRow(Expedition.Type type) {
-    return bottom - 53 - (type == Expedition.Type.RECON ? 34 : 0);
+    return bottom - 53;
+  }
+
+  float expeditionLeft(Expedition.Type type, boolean parallel) {
+    return parallel && type == Expedition.Type.RECON ? 216 : 30;
+  }
+
+  float expeditionRight(Expedition.Type type, boolean parallel) {
+    return parallel && type == Expedition.Type.LOOT ? 204 : 390;
   }
 
   float x(float normalized) {

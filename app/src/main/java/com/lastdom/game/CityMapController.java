@@ -405,15 +405,29 @@ final class CityMapController {
       }
     }
     if (y < layout.top || y > layout.bottom) return TouchResult.NONE;
+    boolean parallel =
+        game.expeditionController.active(Expedition.Type.LOOT) != null
+            && game.expeditionController.active(Expedition.Type.RECON) != null;
+    // Indicators overlay the map; their touch targets take precedence over underlying markers.
+    for (Expedition.Type type : Expedition.Type.values()) {
+      Expedition route = game.expeditionController.active(type);
+      if (route == null) continue;
+      float row = layout.expeditionRow(type);
+      if (x >= layout.expeditionLeft(type, parallel)
+          && x <= layout.expeditionRight(type, parallel)
+          && y >= row
+          && y <= row + 28) {
+        openExpedition(route);
+        return TouchResult.CONSUMED;
+      }
+    }
     for (Expedition.Type type : Expedition.Type.values()) {
       Expedition route = game.expeditionController.active(type);
       if (route == null) continue;
       MapLocation target = game.expeditionController.location(route.locationId);
       float progress = type == Expedition.Type.RECON ? reconDisplayProgress : displayProgress;
       float[] point = ExpeditionConfig.point(target, progress);
-      float row = layout.expeditionRow(type);
-      if (layout.hits(x, y, point[0], point[1])
-          || (x >= 30 && x <= 390 && y >= row && y <= row + 28)) {
+      if (layout.hits(x, y, point[0], point[1])) {
         openExpedition(route);
         return TouchResult.CONSUMED;
       }
