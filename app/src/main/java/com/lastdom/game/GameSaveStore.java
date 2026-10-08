@@ -140,6 +140,7 @@ final class GameSaveStore {
       e.putInt(
           "survival6_output_" + channel,
           game.productionRemainders.values.getOrDefault("survival6_" + channel, 0));
+    RaidSaveStore.save(game, e);
     if (!e.commit()) throw new IllegalStateException("Не удалось сохранить игру");
   }
 
@@ -148,6 +149,7 @@ final class GameSaveStore {
     game.roomUpgrades.clear();
     game.productionRemainders.values.clear();
     game.survivalController.reset();
+    game.raidController.reset();
     for (MapLocation location : game.cityLocations) {
       location.setDepletion(sp.getInt("map_" + location.id + "_depletion", 0));
       try {
@@ -271,6 +273,7 @@ final class GameSaveStore {
             "fatigue",
             -game.productionRemainders.values.getOrDefault("rest_" + resident.id, 0) * 1440);
       }
+    RaidSaveStore.load(game, sp);
   }
 
   private long safeLong(String key, long fallback) {

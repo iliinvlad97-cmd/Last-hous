@@ -37,6 +37,7 @@ final class ExpeditionController {
   String unavailableReason(Resident resident) {
     if (resident == null) return "Житель больше не существует";
     if (game.isBuilding(resident)) return "Занят строительством";
+    if (game.isDefending(resident)) return "Назначен на оборону";
     if (!resident.alive) return "Погиб";
     if (contains(resident) || resident.job.equals("Экспедиция")) return "В экспедиции";
     return game.survivalController.expeditionReason(resident);

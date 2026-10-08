@@ -195,6 +195,12 @@ def main():
         # rest_recovery_regression.py verifies the new protected-rest behavior exactly.
         gameplay_probe = gameplay_probe.replace('set(game,"rnd",new FixedRandom(event));call(game,"triggerEvent");',
             'for(Object person:people())set(person,"fatigue",0);set(game,"rnd",new FixedRandom(event));call(game,"triggerEvent");')
+        # Stage 7 replaces ONLY the old instant marauder event. Its phases, consequences and
+        # saves are covered in raid_regression.py. Keep all other historical event comparisons.
+        gameplay_probe = gameplay_probe.replace('choice<2;choice++){fresh();',
+                                                'choice<2;choice++){if(event==3)continue;fresh();')
+        gameplay_probe = gameplay_probe.replace('k.equals("power")||',
+                                                'k.startsWith("raid7_")||k.equals("power")||')
         fixtures.PROBE = gameplay_probe
         baseline = subprocess.check_output(["git", "show", f"{fixtures.BASELINE}:{fixtures.JAVA_PATH}/MainActivity.java"], cwd=root, text=True)
         original = {"com/lastdom/game/MainActivity.java": baseline, "com/lastdom/game/R.java": current["com/lastdom/game/R.java"]}

@@ -24,6 +24,7 @@ final class RoomUpgradeController {
     if (!resident.alive || resident.health <= 0) return "Нет здоровья";
     if (game.isOnExpedition(resident)) return "В экспедиции";
     if (game.isBuilding(resident)) return "Занят строительством";
+    if (game.isDefending(resident)) return "Назначен на оборону";
     if (game.survivalController.protectedRest(resident)) return "Восстанавливает силы в спальне";
     return "";
   }
@@ -34,6 +35,7 @@ final class RoomUpgradeController {
     if (game.roomLevels[room] >= RoomUpgradeConfig.MAX_LEVEL) return "Максимальный уровень";
     if (game.roomUpgrades.stream().filter(task -> !task.completed).count()
         >= RoomUpgradeConfig.MAX_ACTIVE) return "Сначала завершите текущее строительство";
+    if (game.raidController.repairing()) return "Сначала завершите ремонт баррикад";
     long missing = (long) RoomUpgradeConfig.cost(room, game.roomLevels[room] + 1) - game.mats;
     return missing > 0 ? "Не хватает материалов: " + missing : "";
   }

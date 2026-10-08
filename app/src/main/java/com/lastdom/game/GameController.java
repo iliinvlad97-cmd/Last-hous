@@ -11,6 +11,7 @@ class GameController extends GameState {
   final ExpeditionController expeditionController = new ExpeditionController(this);
   final RoomUpgradeController roomUpgradeController = new RoomUpgradeController(this);
   final SurvivalController survivalController = new SurvivalController(this);
+  final RaidController raidController = new RaidController(this);
   private final GameSaveStore saves;
   private final Runnable redraw;
 
@@ -62,6 +63,7 @@ class GameController extends GameState {
     roomUpgrades.clear();
     productionRemainders.values.clear();
     survivalController.reset();
+    raidController.reset();
     for (MapLocation location : cityLocations) {
       location.setDepletion(0);
       location.setState(
@@ -115,6 +117,7 @@ class GameController extends GameState {
     roomUpgradeController.advanceMinute();
     if (nextDay) dailyCycle();
     expeditionController.advanceMinute();
+    raidController.advanceMinute();
     save(); // Atomic survival/resource/clock/phase snapshot, including prepaid ration balances.
   }
 
@@ -152,6 +155,8 @@ class GameController extends GameState {
 
   int homeRoomFor(Resident s) {
     if (!s.alive || isOnExpedition(s)) return -1;
+    if (raidController.repairBuilder(s)) return 4;
+    if (isDefending(s)) return 4;
     if (isBuilding(s)) {
       RoomUpgradeTask task = roomUpgradeController.taskFor(s);
       return task == null ? -1 : task.room;
@@ -167,7 +172,10 @@ class GameController extends GameState {
   String occupants(int ri) {
     StringBuilder s = new StringBuilder();
     for (Resident q : people)
-      if (homeRoomFor(q) == ri && !isBuilding(q) && !survivalController.treating(q)) {
+      if (homeRoomFor(q) == ri
+          && !isBuilding(q)
+          && !isDefending(q)
+          && !survivalController.treating(q)) {
         if (s.length() > 0) s.append(",");
         s.append(q.name);
       }
@@ -199,8 +207,10 @@ class GameController extends GameState {
 
   int availableExplorer() {
     for (int i = 0; i < people.size(); i++)
-      if (people.get(i).alive && !isOnExpedition(people.get(i)) && !isBuilding(people.get(i)))
-        return i;
+      if (people.get(i).alive
+          && !isOnExpedition(people.get(i))
+          && !isBuilding(people.get(i))
+          && !isDefending(people.get(i))) return i;
     return -1;
   }
 
@@ -221,10 +231,15 @@ class GameController extends GameState {
     return resident.job.equals("Экспедиция") || expeditionController.contains(resident);
   }
 
+  boolean isDefending(Resident resident) {
+    return raidController.defending(resident);
+  }
+
   boolean isBuilding(Resident resident) {
     return resident.status == Resident.Status.BUILDING
         || resident.job.equals("Строительство")
-        || roomUpgradeController.taskFor(resident) != null;
+        || roomUpgradeController.taskFor(resident) != null
+        || raidController.repairBuilder(resident);
   }
 
   boolean assignJob(int index, String job) {
@@ -232,7 +247,8 @@ class GameController extends GameState {
         || index >= people.size()
         || !people.get(index).alive
         || isOnExpedition(people.get(index))
-        || isBuilding(people.get(index))) return false;
+        || isBuilding(people.get(index))
+        || isDefending(people.get(index))) return false;
     people.get(index).job = job;
     people.get(index).autoRecovery = false;
     people.get(index).resumeJob = "";
@@ -252,6 +268,10 @@ class GameController extends GameState {
   }
 
   void repairRoom(int i) {
+    if (i == 4) {
+      addLog("Ремонт баррикад требует выбора строителя в панели обороны.");
+      return;
+    }
     int cost = Math.max(1, (100 - roomCondition[i]) / 15);
     if (roomCondition[i] >= 95) return;
     if (mats >= cost) {
@@ -272,7 +292,13 @@ class GameController extends GameState {
     screen = 0;
     overlay = 0;
     int e = rnd.nextInt(5);
-    incidentRoom = e == 0 ? 4 : e == 1 ? 0 : e == 2 ? 2 : e == 3 ? 4 : 5;
+    if (e == 3) {
+      event = false;
+      incidentRoom = -1;
+      raidController.checkDailyThreat();
+      return;
+    }
+    incidentRoom = e == 0 ? 4 : e == 1 ? 0 : e == 2 ? 2 : 5;
     if (e == 0) ev("ЧУЖАК У ДВЕРИ", "Ночью в дверь стучит незнакомец.", "ВПУСТИТЬ", "ОТКАЗАТЬ");
     else if (e == 1)
       ev(
@@ -281,7 +307,6 @@ class GameController extends GameState {
           "РЕМОНТ",
           "ОТКЛЮЧИТЬ");
     else if (e == 2) ev("БОЛЕЗНЬ", "Одному из жителей нужна помощь.", "ЛЕЧИТЬ", "ОТДЫХ");
-    else if (e == 3) ev("МАРОДЁРЫ", "У входа замечены вооружённые люди.", "ОТДАТЬ ЕДУ", "ОБОРОНА");
     else ev("ТИХАЯ НОЧЬ", "Дом наконец затих. Можно восстановить силы.", "ОТДЫХ", "ДЕЖУРИТЬ");
     autoRespondToIncident();
   }
@@ -301,7 +326,7 @@ class GameController extends GameState {
     }
     if (pick >= 0 && wanted != null) {
       Resident s = people.get(pick);
-      if (!isOnExpedition(s) && !isBuilding(s)) {
+      if (!isOnExpedition(s) && !isBuilding(s) && !isDefending(s)) {
         s.job = wanted;
         addLog(s.name + " автоматически реагирует: " + wanted.toLowerCase() + ".");
       }
@@ -315,6 +340,7 @@ class GameController extends GameState {
       if (!s.alive
           || isOnExpedition(s)
           || isBuilding(s)
+          || isDefending(s)
           || survivalController.protectedRest(s)
           || survivalController.treating(s)
           || s.health <= SurvivalConfig.CRITICAL_HEALTH) continue;
@@ -363,15 +389,11 @@ class GameController extends GameState {
         addLog(n == 0 ? "Больному помогли." : "Болезнь ослабила жителя.");
       }
     } else if (eventTitle.equals("МАРОДЁРЫ")) {
-      if (n == 0) food = Math.max(0, food - 7);
-      else {
-        threat = Math.max(0, threat - roomUpgradeController.scale(4, 3, "defense"));
-        roomCondition[4] = Math.max(10, roomCondition[4] - 8);
-      }
-      addLog("Столкновение у баррикад завершилось.");
+      // Old instant raid is superseded: no second theft/damage alongside Stage 7.
+      raidController.checkDailyThreat();
     } else {
       for (Resident s : people)
-        if (s.alive && !isOnExpedition(s) && !isBuilding(s))
+        if (s.alive && !isOnExpedition(s) && !isBuilding(s) && !isDefending(s))
           s.fatigue = Math.max(0, s.fatigue - (n == 0 ? 15 : 5));
       addLog("Ночь использовали с пользой.");
     }

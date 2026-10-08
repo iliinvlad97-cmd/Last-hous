@@ -20,6 +20,8 @@ final class ResidentNeedsRenderer {
   private String activity(Resident r, int index) {
     if (view.game.isOnExpedition(r))
       return "В экспедиции — " + view.game.expeditionController.memberLocation(r);
+    if (view.game.isDefending(r)) return "Защищает убежище";
+    if (view.game.raidController.repairBuilder(r)) return "Ремонтирует баррикады";
     if (view.game.survivalController.treating(r)) return "Лечится в медпункте";
     if (view.game.survivalController.resting(r)) return "Отдыхает в спальне";
     return view.residentRenderer.residentState(r, index);
@@ -146,7 +148,8 @@ final class ResidentNeedsRenderer {
             12,
             inMetrics ? color(values[metric], metric == 0 || metric == 4) : view.text);
     }
-    boolean busy = view.game.isOnExpedition(r) || view.game.isBuilding(r);
+    boolean busy =
+        view.game.isOnExpedition(r) || view.game.isBuilding(r) || view.game.isDefending(r);
     view.box(c, 30, l.footer, 390, l.footer + 44, busy ? view.panel2 : view.accent, 10);
     view.bold(
         c,

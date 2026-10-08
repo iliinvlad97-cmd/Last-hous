@@ -5,7 +5,8 @@ final class Resident {
   enum Status {
     HOME,
     ON_EXPEDITION,
-    BUILDING
+    BUILDING,
+    DEFENDING
   }
 
   Status status = Status.HOME;

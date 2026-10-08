@@ -29,7 +29,10 @@ final class SurvivalController {
   }
 
   boolean resting(Resident r) {
-    return !game.isOnExpedition(r) && !game.isBuilding(r) && r.job.equals("Отдых");
+    return !game.isOnExpedition(r)
+        && !game.isBuilding(r)
+        && !game.isDefending(r)
+        && r.job.equals("Отдых");
   }
 
   boolean protectedRest(Resident r) {
@@ -42,11 +45,19 @@ final class SurvivalController {
   }
 
   boolean treating(Resident r) {
-    return !game.isOnExpedition(r) && !game.isBuilding(r) && r.job.equals("Лечится");
+    return !game.isOnExpedition(r)
+        && !game.isBuilding(r)
+        && !game.isDefending(r)
+        && r.job.equals("Лечится");
   }
 
   boolean working(Resident r) {
-    return r.alive && !game.isOnExpedition(r) && !game.isBuilding(r) && !resting(r) && !treating(r);
+    return r.alive
+        && !game.isOnExpedition(r)
+        && !game.isBuilding(r)
+        && !game.isDefending(r)
+        && !resting(r)
+        && !treating(r);
   }
 
   String expeditionReason(Resident r) {
@@ -74,7 +85,7 @@ final class SurvivalController {
   }
 
   private void recoverAI(Resident r) {
-    if (!r.alive || game.isOnExpedition(r) || game.isBuilding(r)) return;
+    if (!r.alive || game.isOnExpedition(r) || game.isBuilding(r) || game.isDefending(r)) return;
     boolean medical = medicalStaffAvailable();
     if (r.health < SurvivalConfig.TREAT_START && medical && !treating(r)) {
       if (!r.autoRecovery) r.resumeJob = r.job;
@@ -181,6 +192,7 @@ final class SurvivalController {
       // Preserve the existing free, staff-dependent treatment rule; no medicine cost existed.
       if (!away
           && !game.isBuilding(r)
+          && !game.isDefending(r)
           && r.hunger < SurvivalConfig.CRITICAL
           && r.thirst < SurvivalConfig.CRITICAL) {
         healthRate +=

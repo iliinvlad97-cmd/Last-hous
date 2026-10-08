@@ -3,6 +3,7 @@ package com.lastdom.game;
 /** Transient overlay selections only; building mutations belong to RoomUpgradeController. */
 final class RoomUpgradePanelController {
   private final GameController game;
+  Runnable defenseOpen = () -> {};
   boolean choosing;
   String builderId = "", message = "";
   int page, scroll, lineCount;
@@ -106,6 +107,10 @@ final class RoomUpgradePanelController {
     } else if (layout.secondary(y)) {
       if (x >= 214 && x <= 390) close();
       else if (x >= 30 && x <= 206) {
+        if (game.selectedRoom == 4) {
+          defenseOpen.run();
+          return;
+        }
         int selected = -1;
         for (int i = 0; i < game.people.size(); i++)
           if (game.roomUpgradeController.unavailableReason(game.people.get(i)).isEmpty()) {

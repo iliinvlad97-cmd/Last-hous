@@ -27,6 +27,7 @@ final class ShelterRenderer {
     // The exit is part of the world. Only an invisible tap target is added here.
     drawFullSceneState(c, sceneTop, sceneBottom);
     view.roomUpgradeRenderer.drawIndicators(c, sceneTop, sceneBottom);
+    view.defenseRenderer.indicator(c, sceneTop, sceneBottom);
     view.residentRenderer.drawFullSceneResidents(c, sceneTop, sceneBottom);
     view.hudRenderer.drawNav(c);
     if (view.game.overlay == 1) view.overlayRenderer.drawResidentOverlay(c);

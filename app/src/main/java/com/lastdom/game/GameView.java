@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v0.9.9 • SURVIVOR NEEDS • STAGE 6";
+  static final String VERSION_LABEL = "v1.0.0 • SHELTER DEFENSE • STAGE 7";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -34,6 +34,7 @@ public final class GameView extends View {
                     && (game.expeditionController.report().state() == Expedition.State.COMPLETED
                         || game.expeditionController.report().state()
                             == Expedition.State.AWAITING_DECISION))) cityMap.openPendingReport();
+            defensePanel.pending();
             invalidate();
           }
           timer.postDelayed(this, 1000);
@@ -47,6 +48,8 @@ public final class GameView extends View {
   final OverlayRenderer overlayRenderer = new OverlayRenderer(this);
   final ResidentNeedsRenderer residentNeedsRenderer = new ResidentNeedsRenderer(this);
   final ResidentNeedsPanelController residentNeedsPanel = new ResidentNeedsPanelController(this);
+  final DefensePanelController defensePanel = new DefensePanelController(this);
+  final DefensePanelRenderer defenseRenderer = new DefensePanelRenderer(this);
   final CityMapController cityMap;
   final RoomUpgradePanelController roomUpgradePanel;
   final RoomUpgradeRenderer roomUpgradeRenderer = new RoomUpgradeRenderer(this);
@@ -63,9 +66,11 @@ public final class GameView extends View {
     game = new GameController(context.getSharedPreferences("save_v02", 0), this::invalidate);
     cityMap = new CityMapController(game);
     roomUpgradePanel = new RoomUpgradePanelController(game);
+    roomUpgradePanel.defenseOpen = defensePanel::openStatus;
     Expedition restored = game.expeditionController.active();
     if (restored != null && restored.state() == Expedition.State.AWAITING_DECISION)
       cityMap.openPendingReport();
+    defensePanel.pending();
     timer.postDelayed(tick, 1000);
   }
 
@@ -116,13 +121,19 @@ public final class GameView extends View {
     else if (game.screen == 3) overlayRenderer.drawRooms(c);
     else if (game.screen == 4) overlayRenderer.drawRoomDetail(c);
     else overlayRenderer.drawMap(c);
-    if (game.overlay == 0 && !game.event && !cityMap.eventPanel && !cityMap.expeditionPanel)
-      residentNeedsRenderer.notice(c);
+    if (game.overlay == 0
+        && !game.event
+        && !cityMap.eventPanel
+        && !cityMap.expeditionPanel
+        && !defenseRenderer.noticeVisible()
+        && !defensePanel.open) residentNeedsRenderer.notice(c);
+    defenseRenderer.notice(c);
     if (game.screen != CITY_MAP && cityMap.expeditionPanel)
       expeditionRenderer.drawPanel(c, new CityMapLayout(H / scale));
     if (cityMap.eventPanel) expeditionEventRenderer.draw(c, new CityMapLayout(H / scale));
     if (game.event) overlayRenderer.drawEvent(c);
     if (game.jobMenu) overlayRenderer.drawJobMenu(c);
+    if (defensePanel.open) defenseRenderer.draw(c);
     if (game.gameOver) overlayRenderer.drawGameOver(c);
   }
 
@@ -194,6 +205,28 @@ public final class GameView extends View {
 
   @Override
   public boolean onTouchEvent(MotionEvent e) {
+    if (defensePanel.open && !game.gameOver) {
+      RoomUpgradeLayout defenseLayout = new RoomUpgradeLayout(H / scale);
+      if (defensePanel.scrollTouch(e.getAction(), e.getY() / scale, defenseLayout)) {
+        invalidate();
+        return true;
+      }
+      if (e.getAction() == MotionEvent.ACTION_UP)
+        defensePanel.touch(e.getX() / scale, e.getY() / scale, defenseLayout);
+      invalidate();
+      return true;
+    }
+    if (e.getAction() == MotionEvent.ACTION_UP && defenseRenderer.noticeVisible()) {
+      float top = H / scale - 144;
+      if (e.getX() / scale >= 18
+          && e.getX() / scale <= 402
+          && e.getY() / scale >= top
+          && e.getY() / scale <= top + 52) {
+        defensePanel.openStatus();
+        invalidate();
+        return true;
+      }
+    }
     if ((game.screen == HOME && (game.overlay == 1 || game.overlay == 3) || game.screen == 1)
         && !game.event
         && !game.gameOver
@@ -230,7 +263,10 @@ public final class GameView extends View {
     if (e.getAction() != MotionEvent.ACTION_UP) return true;
     float x = e.getX() / scale, y = e.getY() / scale, hh = H / scale;
     if (game.gameOver) {
-      if (y > hh / 2) game.reset();
+      if (y > hh / 2) {
+        defensePanel.open = false;
+        game.reset();
+      }
       return true;
     }
     if (game.event) {
@@ -244,10 +280,13 @@ public final class GameView extends View {
       for (int i = 0; i < game.jobs.length; i++) {
         float yy = t + 55 + i * 45;
         if (y >= yy && y <= yy + 36) {
-          game.assignJob(game.selected, game.jobs[i]);
+          boolean assigned = game.assignJob(game.selected, game.jobs[i]);
           game.jobMenu = false;
           game.overlay = 1;
-          game.addLog(game.people.get(game.selected).name + ": " + game.jobs[i] + ".");
+          game.addLog(
+              assigned
+                  ? game.people.get(game.selected).name + ": " + game.jobs[i] + "."
+                  : "Назначение недоступно: житель занят.");
           game.save();
           invalidate();
           return true;

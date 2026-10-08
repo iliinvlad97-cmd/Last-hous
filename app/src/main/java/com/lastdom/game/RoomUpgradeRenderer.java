@@ -58,6 +58,40 @@ final class RoomUpgradeRenderer {
       for (Resident resident : game.people)
         if (game.survivalController.treating(resident)) lines.add("Лечится: " + resident.name);
     lines.add(game.roomBonus(room));
+    if (room == 4) {
+      lines.add("Прочность баррикад: " + game.raidController.durability + "%");
+      lines.add("Сила защиты: " + Math.round(game.raidController.defensePower()));
+      RaidState raid = game.raidController.active();
+      StringBuilder defenders = new StringBuilder();
+      if (raid != null)
+        for (String id : raid.defenders.keySet()) {
+          Resident defender = game.expeditionController.resident(id);
+          if (defender != null) {
+            if (defenders.length() > 0) defenders.append(", ");
+            defenders.append(defender.name);
+          }
+        }
+      lines.add("Защитники: " + (defenders.length() == 0 ? "—" : defenders));
+      lines.add(
+          "Ремонт: "
+              + RaidConfig.REPAIR_AMOUNT
+              + "% за "
+              + RaidConfig.REPAIR_COST
+              + " материалов • "
+              + RaidConfig.REPAIR_MINUTES
+              + " игровых минут.");
+      if (game.raidController.repairing()) {
+        BarricadeRepair repair = game.raidController.repair;
+        Resident repairer = game.expeditionController.resident(repair.builderId);
+        lines.add("Ремонтник: " + (repairer == null ? "—" : repairer.name));
+        lines.add(
+            "Ремонт "
+                + repair.elapsed * 100 / RaidConfig.REPAIR_MINUTES
+                + "% • осталось "
+                + repair.remaining()
+                + " мин.");
+      }
+    }
     RoomUpgradeTask active = game.roomUpgradeController.active();
     if (active != null && active.room == room) {
       Resident builder = game.expeditionController.resident(active.builderId);
@@ -106,7 +140,8 @@ final class RoomUpgradeRenderer {
                     ? "УЛУЧШИТЬ ДО УРОВНЯ " + (game.roomLevels[room] + 1)
                     : "НАЧАТЬ СТРОИТЕЛЬСТВО";
     button(c, 30, layout.actionTop, 390, 48, button, blocked.isEmpty());
-    button(c, 30, layout.secondaryTop, 206, 43, "НАЗНАЧИТЬ", false);
+    button(
+        c, 30, layout.secondaryTop, 206, 43, room == 4 ? "ОБОРОНА / РЕМОНТ" : "НАЗНАЧИТЬ", false);
     button(c, 214, layout.secondaryTop, 390, 43, "ЗАКРЫТЬ", false);
   }
 

@@ -77,7 +77,7 @@ final class ResidentNeedsPanelController {
     }
     if (game.selected < 0 || game.selected >= game.people.size()) return;
     Resident r = game.people.get(game.selected);
-    boolean busy = game.isOnExpedition(r) || game.isBuilding(r);
+    boolean busy = game.isOnExpedition(r) || game.isBuilding(r) || game.isDefending(r);
     if (y >= l.footer && y <= l.footer + 44 && !busy) game.jobMenu = true;
     else if (y >= l.footer + 54 && y <= l.footer + 98) {
       if (x < 210 && !busy) game.assignJob(game.selected, "Отдых");
