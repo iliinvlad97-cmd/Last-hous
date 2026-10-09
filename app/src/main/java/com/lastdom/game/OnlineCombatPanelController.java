@@ -179,6 +179,8 @@ final class OnlineCombatPanelController {
             pvp
                 ? "Риск: очень высокий · виртуальные противники"
                 : "Время: " + OnlineCombatRules.coopMinutes(state.zoneId) + " игровых минут");
+        if (!pvp && state.zone() != null)
+          row("Опасность: " + state.zone().danger, "Только демонстрационные участники и ресурсы");
         if (pvp)
           rows.add(
               new Row(

@@ -74,7 +74,21 @@ final class OnlineCombatRenderer {
           3,
           count * 100 / battle.report.actions.size(),
           opacity(view.accent));
-    } else view.txt(c, controller.subtitle(), 34, g.panelTop + 63, 12, opacity(view.accent));
+    } else {
+      view.txt(c, controller.subtitle(), 34, g.panelTop + 63, 12, opacity(view.accent));
+      if (state.panel == OnlineWorldState.Panel.COOP_REPORT) {
+        OnlineCoopExpedition expedition = state.gameplay.combat.expedition(controller.reportId);
+        if (expedition != null)
+          view.bar(
+              c,
+              34,
+              g.panelTop + 71,
+              386,
+              3,
+              expedition.elapsedMinutes * 100 / expedition.durationMinutes,
+              opacity(view.good));
+      }
+    }
     if (state.confirmationGlow > .01f)
       view.box(
           c,
@@ -151,9 +165,7 @@ final class OnlineCombatRenderer {
             34,
             386,
             controller.confirming
-                ? state.panel == OnlineWorldState.Panel.PVP_PREP
-                    ? "ПОДТВЕРДИТЬ БОЙ"
-                    : "ОТПРАВИТЬ ОТРЯД"
+                ? state.panel == OnlineWorldState.Panel.PVP_PREP ? "ПОДТВЕРДИТЬ БОЙ" : "ОТПРАВИТЬ"
                 : "К ПОДТВЕРЖДЕНИЮ",
             view.accent);
         break;

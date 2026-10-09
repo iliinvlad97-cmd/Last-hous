@@ -52,7 +52,9 @@ final class OnlineWorldPanelRenderer {
           c,
           state.panel == OnlineWorldState.Panel.INVENTORY
               ? "ОТРЯД"
-              : state.zone().type == OnlineZone.Type.PVP ? "БОЙ" : "PvE",
+              : state.zone().type == OnlineZone.Type.PVP
+                  ? "БОЙ"
+                  : state.coop(state.zoneId) != null ? "ОТЧЁТ" : "PvE",
           290,
           g.panelTop + 37,
           11,
@@ -85,6 +87,16 @@ final class OnlineWorldPanelRenderer {
         && controller.demoActionsAvailable()) {
       button(c, g, 34, 204, "ТОРГОВЛЯ", view.accent);
       button(c, g, 216, 386, "ПОМОЩЬ", view.good);
+    } else if (state.panel == OnlineWorldState.Panel.OBJECT
+        && state.zone() != null
+        && state.zone().type == OnlineZone.Type.PVE) {
+      button(
+          c,
+          g,
+          34,
+          386,
+          "СОВМЕСТНАЯ ЭКСПЕДИЦИЯ",
+          controller.demoActionsAvailable() ? view.accent : view.panel2);
     } else if (state.panel == OnlineWorldState.Panel.TRADE
         || state.panel == OnlineWorldState.Panel.HELP) {
       OnlineWorldGameplay.Offer offer = state.offer();
@@ -248,18 +260,46 @@ final class OnlineWorldPanelRenderer {
       fact("Предложения: 2 одноразовые сделки");
       fact("Помощь: 1 локальный запрос");
       fact("Демо-репутация: " + state.gameplay.reputation, view.good);
+      add("Для совместной экспедиции выберите PvE-район на карте, затем это убежище как союзника.");
       add("Выберите действие кнопками ниже. Баланс и история доступны через «ЗАПАСЫ» на карте.");
     } else if (zone != null) {
       title = "РАЙОН РАДИОСЕТИ";
       subtitle = zone.name;
       if (zone.type == OnlineZone.Type.PVP)
         fact(state.pvpEnabled ? "Участие: демо-отряд подготовлен." : "Участие: PvP выключено.");
+      OnlineCoopExpedition expedition =
+          zone.type == OnlineZone.Type.PVE ? state.coop(zone.id) : null;
+      if (expedition != null) {
+        fact(
+            expedition.active()
+                ? "В пути: "
+                    + expedition.elapsedMinutes * 100 / expedition.durationMinutes
+                    + "% · осталось "
+                    + (expedition.durationMinutes - expedition.elapsedMinutes)
+                    + " мин."
+                : "ОТЧЁТ ЭКСПЕДИЦИИ ГОТОВ",
+            view.good);
+        fact("Союзник: " + state.shelterName(expedition.allyId));
+        if (!expedition.active())
+          fact(
+              expedition.success
+                  ? "Результат: успех · награда уже начислена"
+                  : "Результат: неудача · без награды");
+      }
       fact(
           "Тип: "
               + (zone.type == OnlineZone.Type.SAFE
                   ? "Безопасный"
                   : zone.type == OnlineZone.Type.PVE ? "PvE" : "Добровольный PvP"));
       fact("Опасность: " + zone.danger);
+      if (zone.type == OnlineZone.Type.PVE) {
+        fact("Длительность: " + OnlineCombatRules.coopMinutes(zone.id) + " игровых минут");
+        if (expedition != null) {
+          add(
+              "Кнопка «ОТЧЁТ» в шапке открывает состав, вклад союзника и результат. Все задания"
+                  + " доступны через «ЗАПАСЫ» → «ОТРЯД» → «ОТЧЁТЫ».");
+        }
+      }
       add(zone.description);
       if (!state.result.isEmpty())
         fact(state.result, state.resultSuccess ? view.good : view.accent);
@@ -277,7 +317,8 @@ final class OnlineWorldPanelRenderer {
       else
         add(
             zone.type == OnlineZone.Type.PVE
-                ? "Кнопка «PvE» открывает совместное задание с виртуальным союзником."
+                ? "Нажмите «СОВМЕСТНАЯ ЭКСПЕДИЦИЯ» внизу: выберите демо-бойцов и убежище-союзника,"
+                    + " затем подтвердите отправку."
                 : "Безопасный район: PvP здесь недоступен.");
       add("Демо-карта не открывает и не закрывает районы одиночной игры.");
     } else if (squad != null) {

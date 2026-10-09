@@ -94,6 +94,18 @@ final class OnlineWorldState {
     return gameplay.operation(deliveryId);
   }
 
+  /** Prefer an active mission; otherwise expose the latest saved report for this region. */
+  OnlineCoopExpedition coop(String zoneId) {
+    OnlineCoopExpedition latest = null;
+    for (int i = gameplay.combat.expeditions.size() - 1; i >= 0; i--) {
+      OnlineCoopExpedition expedition = gameplay.combat.expeditions.get(i);
+      if (!expedition.zoneId.equals(zoneId)) continue;
+      if (expedition.active()) return expedition;
+      if (latest == null) latest = expedition;
+    }
+    return latest;
+  }
+
   String shelterName(String id) {
     for (OnlineShelter shelter : shelters) if (shelter.id.equals(id)) return shelter.name;
     return id;

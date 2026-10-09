@@ -316,11 +316,16 @@ final class OnlineWorldController {
         combatPanel.open(OnlineWorldState.Panel.ROSTER);
       else if (state.panel == OnlineWorldState.Panel.OBJECT
           && state.zone() != null
-          && state.zone().type != OnlineZone.Type.SAFE)
-        combatPanel.open(
-            state.zone().type == OnlineZone.Type.PVP
-                ? OnlineWorldState.Panel.PVP_PREP
-                : OnlineWorldState.Panel.COOP_PREP);
+          && state.zone().type != OnlineZone.Type.SAFE) {
+        OnlineCoopExpedition expedition = state.coop(state.zoneId);
+        if (state.zone().type == OnlineZone.Type.PVE && expedition != null)
+          combatPanel.showReport(expedition.id);
+        else
+          combatPanel.open(
+              state.zone().type == OnlineZone.Type.PVP
+                  ? OnlineWorldState.Panel.PVP_PREP
+                  : OnlineWorldState.Panel.COOP_PREP);
+      }
       return TouchResult.CONSUMED;
     }
     if (card) {
@@ -336,6 +341,12 @@ final class OnlineWorldController {
                   ? OnlineWorldState.Panel.INVENTORY
                   : OnlineWorldState.Panel.OBJECT);
         } else closeCard();
+      } else if (g.secondary(x, y)
+          && state.panel == OnlineWorldState.Panel.OBJECT
+          && state.zone() != null
+          && state.zone().type == OnlineZone.Type.PVE
+          && demoActionsAvailable()) {
+        combatPanel.open(OnlineWorldState.Panel.COOP_PREP);
       } else if (g.secondary(x, y)
           && state.panel == OnlineWorldState.Panel.OBJECT
           && state.shelter() != null

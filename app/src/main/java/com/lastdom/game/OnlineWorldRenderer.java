@@ -113,7 +113,7 @@ final class OnlineWorldRenderer {
   private void drawHeader(Canvas c, OnlineWorldState state) {
     view.box(c, 20, 12, 96, 56, view.panel2, 9);
     view.bold(c, "‹ КАРТА", 30, 39, 11, view.text);
-    view.bold(c, "ONLINE 0.3", 112, 29, 18, view.text);
+    view.bold(c, "ONLINE 0.3.1", 112, 29, 18, view.text);
     view.txt(c, "РАДИОСЕТЬ", 113, 49, 10, view.muted);
     view.box(c, 300, 12, 400, 56, Color.rgb(58, 44, 29), 9);
     view.bold(c, "ЗАПАСЫ", 308, 39, 11, view.accent);
@@ -218,6 +218,19 @@ final class OnlineWorldRenderer {
         g.y(zone.labelPosition.y),
         8,
         alpha(color, selected ? 255 : 215));
+    if (zone.type == OnlineZone.Type.PVE) {
+      OnlineCoopExpedition expedition = state.coop(zone.id);
+      if (expedition != null)
+        center(
+            c,
+            expedition.active()
+                ? "ОТРЯД: " + expedition.elapsedMinutes * 100 / expedition.durationMinutes + "%"
+                : "ОТЧЁТ ГОТОВ",
+            g.x(zone.labelPosition.x),
+            g.y(zone.labelPosition.y) + 14,
+            8,
+            view.good);
+    }
   }
 
   private void drawShelter(
