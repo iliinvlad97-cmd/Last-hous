@@ -12,5 +12,8 @@ final class ReconData {
   final Map<String, String> names = new LinkedHashMap<>();
   final Map<String, Integer> startFatigue = new LinkedHashMap<>(),
       fatigueGain = new LinkedHashMap<>();
+  // openedPoints retains the legacy complete set; these snapshots describe actual changes.
+  boolean discoveryRecorded;
   final List<String> openedPoints = new ArrayList<>();
+  final List<String> newlyOpenedPoints = new ArrayList<>(), discoveredDistricts = new ArrayList<>();
 }

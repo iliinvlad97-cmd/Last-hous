@@ -53,6 +53,12 @@ final class DistrictRenderer {
     List<String> lines = new ArrayList<>();
     if (!view.cityMap.message.isEmpty()) lines.add(view.cityMap.message);
     lines.add("Статус: " + d.state.label);
+    if (d.state == CityDistrict.State.DISCOVERED)
+      lines.add("Район найден, но точки ещё не исследованы. Нужна полноценная разведка.");
+    else if (d.state == CityDistrict.State.EXPLORED)
+      lines.add(
+          "Разведка завершена. Выбирайте открытые места и отправляйте экспедиции за добычей.");
+    else lines.add("Неизведанная территория. Сначала выполните условие открытия.");
     lines.add("Опасность: " + d.config.risk.label);
     lines.add("Потенциальные ресурсы: " + d.config.loot);
     int travel = ExpeditionConfig.oneWayMinutes(location);
@@ -70,15 +76,21 @@ final class DistrictRenderer {
     if (d.state != CityDistrict.State.EXPLORED)
       lines.add(reason.isEmpty() ? "Разведка доступна. Выберите 1–3 жителей." : reason);
     if (d.config.prerequisite.isEmpty())
-      lines.add("Ранний район — предварительная разведка не требуется.");
+      lines.add("Условие: ранний район, исследование других районов не требуется.");
     else
       lines.add(
           "Условие: исследовать "
               + view.game.explorationController.district(d.config.prerequisite).config.name);
-    if (d.state == CityDistrict.State.EXPLORED) {
-      lines.add("ОТКРЫТЫЕ МЕСТА");
-      for (String id : d.config.points) lines.add(view.game.expeditionController.location(id).name);
+    lines.add("УЖЕ ОТКРЫТЫЕ ТОЧКИ");
+    int opened = 0;
+    for (String id : d.config.points) {
+      MapLocation point = view.game.expeditionController.location(id);
+      if (!point.isLocked()) {
+        lines.add(point.name);
+        opened++;
+      }
     }
+    if (opened == 0) lines.add("Открытых точек пока нет.");
     lines.add("Разведка не приносит добычу. Запасы находят обычные экспедиции.");
     lines.add(
         "В пути растут потребности и усталость; возможна травма. После разведки отряд возвращается"

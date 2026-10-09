@@ -45,7 +45,10 @@ final class ExplorationSaveStore {
         .putBoolean(key + "unlocksApplied", d.unlocksApplied)
         .putString(key + "injured", d.injuredId)
         .putInt(key + "healthLoss", d.healthLoss)
-        .putString(key + "opened", String.join(",", d.openedPoints));
+        .putString(key + "opened", String.join(",", d.openedPoints))
+        .putBoolean(key + "discoveryRecorded", d.discoveryRecorded)
+        .putString(key + "newPoints", String.join(",", d.newlyOpenedPoints))
+        .putString(key + "newDistricts", String.join(",", d.discoveredDistricts));
     for (String id : e.participantIds)
       editor
           .putString(key + "name_" + id, d.names.get(id))
@@ -91,6 +94,20 @@ final class ExplorationSaveStore {
       d.startFatigue.put(id, initial);
       if (d.unlocksApplied) d.fatigueGain.put(id, gain);
     }
+    d.discoveryRecorded = preferences.getBoolean(key + "discoveryRecorded", false);
+    readIds(preferences.getString(key + "newPoints", ""), d.newlyOpenedPoints);
+    readIds(preferences.getString(key + "newDistricts", ""), d.discoveredDistricts);
+    if ((!d.discoveryRecorded
+            && (!d.newlyOpenedPoints.isEmpty() || !d.discoveredDistricts.isEmpty()))
+        || (d.discoveryRecorded && !d.unlocksApplied)
+        || (!d.success && (!d.newlyOpenedPoints.isEmpty() || !d.discoveredDistricts.isEmpty()))
+        || !district.config.points.containsAll(d.newlyOpenedPoints))
+      throw new IllegalArgumentException();
+    for (String id : d.discoveredDistricts) {
+      ExplorationConfig.District child = ExplorationConfig.district(id);
+      if (child == null || !child.prerequisite.equals(district.config.id))
+        throw new IllegalArgumentException();
+    }
     Expedition.State state = e.state();
     if (d.chanceBasis < ExplorationConfig.MIN_CHANCE
         || d.chanceBasis > ExplorationConfig.MAX_CHANCE
@@ -127,5 +144,12 @@ final class ExplorationSaveStore {
         || new java.util.HashSet<>(d.openedPoints).size() != d.openedPoints.size())
       throw new IllegalArgumentException();
     e.recon = d;
+  }
+
+  private static void readIds(String saved, java.util.List<String> ids) {
+    if (saved.isEmpty()) return;
+    ids.addAll(java.util.Arrays.asList(saved.split(",", -1)));
+    if (new java.util.HashSet<>(ids).size() != ids.size() || ids.contains(""))
+      throw new IllegalArgumentException();
   }
 }

@@ -52,7 +52,15 @@ final class CityMapRenderer {
     line(canvas, 381, layout.top + 30, 381, layout.top + 49, 1, MUTED);
     line(canvas, 381, layout.top + 30, 377, layout.top + 36, 1, MUTED);
     line(canvas, 381, layout.top + 30, 385, layout.top + 36, 1, MUTED);
-    text(canvas, "ВЫБЕРИТЕ ТОЧКУ ДЛЯ РАЗВЕДКИ", 30, layout.bottom - 11, 8, MUTED, false);
+    MapLocation focus = view.game.expeditionController.location(view.cityMap.focusedLocationId);
+    text(
+        canvas,
+        focus == null ? "ВЫБЕРИТЕ ТОЧКУ НА КАРТЕ" : "ВЫДЕЛЕНО: " + focus.name,
+        30,
+        layout.bottom - 11,
+        8,
+        focus == null ? MUTED : WARM,
+        false);
     view.hudRenderer.drawNav(canvas);
     if (view.cityMap.selected() != null) drawSelection(canvas, layout);
     view.expeditionPreparationRenderer.draw(canvas, layout);
@@ -193,7 +201,10 @@ final class CityMapRenderer {
 
   private void drawMarker(Canvas c, MapLocation location, CityMapLayout m) {
     float x = m.x(location.mapX), y = m.y(location.mapY);
-    boolean locked = location.isLocked(), selected = view.cityMap.selected() == location;
+    boolean locked = location.isLocked(),
+        selected =
+            view.cityMap.selected() == location
+                || view.cityMap.focusedLocationId.equals(location.id);
     int outline = locked ? Color.rgb(104, 128, 145) : WARM;
     if (selected) glow(c, x, y, 31, Color.argb(85, 222, 153, 72));
     fill(c, locked ? Color.rgb(28, 42, 54) : Color.rgb(35, 44, 52));

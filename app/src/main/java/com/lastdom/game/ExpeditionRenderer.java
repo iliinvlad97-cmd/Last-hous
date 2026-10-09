@@ -16,17 +16,16 @@ final class ExpeditionRenderer {
   }
 
   void drawRoute(Canvas c, CityMapLayout layout) {
-    boolean any = false;
     for (Expedition.Type type : Expedition.Type.values()) {
       Expedition e = view.game.expeditionController.active(type);
       if (e != null) {
         drawRoute(c, layout, e);
-        any = true;
-      } else displayed[type.ordinal()] = null;
-    }
-    if (!any) {
-      Expedition report = view.game.expeditionController.report();
-      if (report != null) drawRoute(c, layout, report);
+      } else {
+        displayed[type.ordinal()] = null;
+        displayedState[type.ordinal()] = null;
+        if (type == Expedition.Type.RECON) view.cityMap.reconDisplayProgress = 0;
+        else view.cityMap.displayProgress = 0;
+      }
     }
   }
 

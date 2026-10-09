@@ -154,7 +154,7 @@ final class ExplorationController {
         "Разведка "
             + district(e.locationId).config.name
             + ": "
-            + (data.success ? "найдены новые места" : "новые места не найдены")
+            + (data.success ? "разведка успешна" : "разведка неудачна")
             + ". Отряд возвращается."
             + (data.healthLoss > 0
                 ? " " + data.names.get(data.injuredId) + ": здоровье -" + data.healthLoss + "."
@@ -174,14 +174,20 @@ final class ExplorationController {
       d.state = CityDistrict.State.EXPLORED;
       for (String pointId : d.config.points) {
         MapLocation point = game.expeditionController.location(pointId);
-        if (point.isLocked()) point.setState(MapLocation.State.AVAILABLE);
+        if (point.isLocked()) {
+          point.setState(MapLocation.State.AVAILABLE);
+          data.newlyOpenedPoints.add(pointId);
+        }
         data.openedPoints.add(pointId);
       }
       for (CityDistrict next : game.cityDistricts)
         if (next.state == CityDistrict.State.UNEXPLORED
-            && next.config.prerequisite.equals(d.config.id))
+            && next.config.prerequisite.equals(d.config.id)) {
           next.state = CityDistrict.State.DISCOVERED;
+          data.discoveredDistricts.add(next.config.id);
+        }
     }
+    data.discoveryRecorded = true;
     for (String id : e.participantIds)
       data.fatigueGain.put(
           id,
@@ -193,7 +199,7 @@ final class ExplorationController {
             + d.config.name
             + ". "
             + (data.success
-                ? "Район исследован. Открыто точек: " + data.openedPoints.size()
+                ? "Район исследован. Новых точек: " + data.newlyOpenedPoints.size()
                 : "Разведка неудачна, район не открыт")
             + ". Усталость накоплена за игровое время.");
   }

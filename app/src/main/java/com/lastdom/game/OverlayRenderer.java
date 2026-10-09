@@ -74,13 +74,7 @@ final class OverlayRenderer {
   }
 
   void drawJournal(Canvas c) {
-    view.hudRenderer.drawHeader(c, "журнал событий");
-    float y = 90;
-    for (int i = 0; i < Math.min(view.game.log.size(), 10); i++) {
-      view.wrap(c, view.game.log.get(i), 24, y, 396, 10, i == 0 ? view.text : view.muted, 15);
-      y += 48;
-    }
-    view.hudRenderer.bottomBack(c);
+    view.journalRenderer.draw(c);
   }
 
   void drawEvent(Canvas c) {

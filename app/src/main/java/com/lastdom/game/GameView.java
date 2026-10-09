@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5;
-  static final String VERSION_LABEL = "v1.1.0 • CITY EXPLORATION • STAGE 9";
+  static final String VERSION_LABEL = "v1.1.1 • CITY EXPLORATION • POLISH";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -47,6 +47,8 @@ public final class GameView extends View {
   final DefensePanelController defensePanel = new DefensePanelController(this);
   final DefensePanelRenderer defenseRenderer = new DefensePanelRenderer(this);
   final CityMapController cityMap;
+  final JournalController journal = new JournalController(this);
+  final JournalRenderer journalRenderer = new JournalRenderer(this);
   final RoomUpgradePanelController roomUpgradePanel;
   final RoomUpgradeRenderer roomUpgradeRenderer = new RoomUpgradeRenderer(this);
   final DistrictRenderer districtRenderer = new DistrictRenderer(this);
@@ -331,10 +333,8 @@ public final class GameView extends View {
       }
       navigate(x, y, hh);
     } else if (game.screen == 2) {
-      if (y > hh - 80) {
-        game.screen = 0;
-        invalidate();
-      }
+      journal.touch(x, y);
+      invalidate();
     } else if (game.screen == CITY_MAP) {
       CityMapController.TouchResult result = cityMap.onTouch(x, y, new CityMapLayout(hh));
       if (result == CityMapController.TouchResult.HOME) {

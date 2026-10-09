@@ -106,7 +106,7 @@ final class CityMapController {
   boolean expeditionPanel, eventPanel;
   float displayProgress, reconDisplayProgress;
   boolean districtsLayer;
-  String districtFilterId = "", expeditionId = "";
+  String districtFilterId = "", expeditionId = "", focusedLocationId = "";
   private final java.util.Set<String> shownReports = new java.util.HashSet<>();
   int panelScroll, panelLineCount;
   private float dragY, dragStartY;
@@ -120,9 +120,57 @@ final class CityMapController {
   void openExpedition(Expedition e) {
     closeSelection();
     expeditionId = e.id;
+    if (e.state() == Expedition.State.COMPLETED) shownReports.add(e.id + e.state());
     panelScroll = 0;
     eventPanel = e.state() == Expedition.State.AWAITING_DECISION;
     expeditionPanel = !eventPanel;
+  }
+
+  boolean hasOpenedPoints(Expedition e) {
+    if (e == null
+        || e.type != Expedition.Type.RECON
+        || e.recon == null
+        || e.state() != Expedition.State.COMPLETED
+        || !e.recon.success) return false;
+    for (String id : e.recon.openedPoints) {
+      MapLocation point = game.expeditionController.location(id);
+      if (point != null && !point.isLocked()) return true;
+    }
+    return false;
+  }
+
+  void showOpenedPoints(Expedition e) {
+    if (!hasOpenedPoints(e)) return;
+    String first = "";
+    // Prefer an actually new point, with a safe fallback for legacy reports.
+    for (String id : e.recon.newlyOpenedPoints)
+      if (!game.expeditionController.location(id).isLocked()) {
+        first = id;
+        break;
+      }
+    if (first.isEmpty())
+      for (String id : e.recon.openedPoints)
+        if (!game.expeditionController.location(id).isLocked()) {
+          first = id;
+          break;
+        }
+    game.expeditionController.acknowledge(e.id);
+    showDistrictPoints(game.explorationController.district(e.locationId), first);
+  }
+
+  private void showDistrictPoints(CityDistrict district, String preferred) {
+    closeSelection();
+    game.screen = GameView.CITY_MAP;
+    game.overlay = 0;
+    districtFilterId = district.config.id;
+    districtsLayer = false;
+    focusedLocationId = preferred;
+    if (focusedLocationId.isEmpty())
+      for (String id : district.config.points)
+        if (!game.expeditionController.location(id).isLocked()) {
+          focusedLocationId = id;
+          break;
+        }
   }
 
   void openPendingReport() {
@@ -174,7 +222,10 @@ final class CityMapController {
     float footer =
         eventPanel && current != null
             ? new ExpeditionEventLayout(layout, current.explorationEvent).footer
-            : selected != null && selected.kind == MapLocation.Kind.DISTRICT ? 132 : 84;
+            : (selected != null && selected.kind == MapLocation.Kind.DISTRICT)
+                    || (expeditionPanel && hasOpenedPoints(current))
+                ? 132
+                : 84;
     if (!panel) return false;
     if (action == android.view.MotionEvent.ACTION_DOWN) {
       dragging = y >= layout.panelTop + 75 && y <= layout.panelBottom - footer;
@@ -260,7 +311,6 @@ final class CityMapController {
   }
 
   TouchResult onTouch(float x, float y, CityMapLayout layout) {
-    Expedition active = panelExpedition();
     if (eventPanel) {
       Expedition expedition = panelExpedition();
       if (expedition == null || expedition.state() != Expedition.State.AWAITING_DECISION) {
@@ -295,7 +345,13 @@ final class CityMapController {
     }
     if (expeditionPanel) {
       Expedition report = panelExpedition();
-      if (layout.hitsPreparation(x, y)) {
+      if (hasOpenedPoints(report)
+          && x >= 34
+          && x <= 386
+          && y >= layout.panelBottom - 114
+          && y <= layout.panelBottom - 76) {
+        showOpenedPoints(report);
+      } else if (layout.hitsPreparation(x, y)) {
         if (report != null && report.state() == Expedition.State.AWAITING_RETURN) {
           message = game.expeditionController.returnHome(report.id);
           if (message.isEmpty()) {
@@ -383,9 +439,7 @@ final class CityMapController {
         if (selected.kind == MapLocation.Kind.DISTRICT) {
           CityDistrict d = game.explorationController.district(selected.id);
           if (d.state == CityDistrict.State.EXPLORED) {
-            districtFilterId = d.config.id;
-            districtsLayer = false;
-            closeSelection();
+            showDistrictPoints(d, "");
           } else prepare();
         } else if (selected.isLocked()) closeSelection();
         else prepare();
@@ -396,11 +450,13 @@ final class CityMapController {
       if (x >= 20 && x <= 144) {
         districtsLayer = false;
         districtFilterId = "";
+        focusedLocationId = "";
         return TouchResult.CONSUMED;
       }
       if (x >= 152 && x <= 276) {
         districtsLayer = true;
         districtFilterId = "";
+        focusedLocationId = "";
         return TouchResult.CONSUMED;
       }
     }
@@ -432,19 +488,10 @@ final class CityMapController {
         return TouchResult.CONSUMED;
       }
     }
-    // A completed report remains on its indicator until acknowledged.
-    if (active != null
-        && active.state() == Expedition.State.COMPLETED
-        && x >= 30
-        && x <= 390
-        && y >= layout.expeditionRow(active.type)
-        && y <= layout.expeditionRow(active.type) + 28) {
-      openExpedition(active);
-      return TouchResult.CONSUMED;
-    }
     for (MapLocation location : visibleLocations()) {
       if (layout.hits(x, y, location.mapX, location.mapY)) {
         selected = location;
+        focusedLocationId = location.id;
         panelScroll = 0;
         message = "";
         return TouchResult.CONSUMED;
