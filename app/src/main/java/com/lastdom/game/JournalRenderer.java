@@ -17,8 +17,9 @@ final class JournalRenderer {
     JournalLayout layout = new JournalLayout(view.H / view.scale);
     int pages = journal.pages(layout);
     journal.page = Math.max(0, Math.min(pages - 1, journal.page));
-    tab(c, 24, 204, "СОБЫТИЯ", !journal.reports);
-    tab(c, 216, 396, "ОТЧЁТЫ ОТРЯДОВ", journal.reports);
+    tab(c, 24, 138, "СОБЫТИЯ", !journal.reports);
+    tab(c, 146, 304, "ОТЧЁТЫ ОТРЯДОВ", journal.reports);
+    tab(c, 312, 396, "СЮЖЕТ", false);
     List<Expedition> reports = journal.completedReports();
     List<String> events = journal.eventEntries();
     int count = journal.reports ? reports.size() : events.size();

@@ -284,7 +284,9 @@ final class ExplorationConfig {
   }
 
   static MapLocation.State initialLocationState(MapLocation location) {
-    return location.kind == MapLocation.Kind.DISTRICT || owner(location.id) != null
+    return location.kind == MapLocation.Kind.STORY
+            || location.kind == MapLocation.Kind.DISTRICT
+            || owner(location.id) != null
         ? MapLocation.State.LOCKED
         : MapLocation.State.AVAILABLE;
   }

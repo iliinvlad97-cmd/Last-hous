@@ -146,10 +146,12 @@ final class GameSaveStore {
     ProductionSaveStore.save(game.production, e);
     RaidSaveStore.save(game, e);
     game.resourceAccounting.save(e);
+    StoryRepository.save(game.story, e);
     if (!e.commit()) throw new IllegalStateException("Не удалось сохранить игру");
   }
 
   void load(GameController game) {
+    game.storyController.reset();
     game.expeditions.clear();
     game.roomUpgrades.clear();
     game.productionRemainders.values.clear();
@@ -282,6 +284,8 @@ final class GameSaveStore {
     ProductionSaveStore.load(game.production, sp);
     RaidSaveStore.load(game, sp);
     game.resourceAccounting.load(game, sp);
+    StoryRepository.load(game.story, sp);
+    game.storyController.restore();
   }
 
   private long safeLong(String key, long fallback) {

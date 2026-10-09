@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5, ONLINE_WORLD = 6;
-  static final String VERSION_LABEL = "v1.1.1 • CITY EXPLORATION • POLISH";
+  static final String VERSION_LABEL = "v1.1.1 • THE LAST SIGNAL • STORY 1.0";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -33,6 +33,7 @@ public final class GameView extends View {
             }
             cityMap.openPendingReport();
             defensePanel.pending();
+            storyPanel.pending();
             invalidate();
           }
           onlineWorld.advanceSecond();
@@ -53,6 +54,8 @@ public final class GameView extends View {
   final CityMapController cityMap;
   final OnlineWorldController onlineWorld;
   final OnlineWorldRenderer onlineWorldRenderer;
+  final StoryPanelController storyPanel = new StoryPanelController(this);
+  final StoryRenderer storyRenderer = new StoryRenderer(this);
   final JournalController journal = new JournalController(this);
   final JournalRenderer journalRenderer = new JournalRenderer(this);
   final RoomUpgradePanelController roomUpgradePanel;
@@ -88,6 +91,7 @@ public final class GameView extends View {
     if (restored != null && restored.state() == Expedition.State.AWAITING_DECISION)
       cityMap.openPendingReport();
     defensePanel.pending();
+    storyPanel.pending();
     timer.postDelayed(tick, 1000);
   }
 
@@ -155,6 +159,9 @@ public final class GameView extends View {
     if (game.event) overlayRenderer.drawEvent(c);
     if (game.jobMenu) overlayRenderer.drawJobMenu(c);
     if (defensePanel.open) defenseRenderer.draw(c);
+    storyRenderer.notice(c);
+    if (storyPanel.open && !game.event && !game.gameOver && !defensePanel.open)
+      storyRenderer.draw(c);
     if (game.gameOver) overlayRenderer.drawGameOver(c);
   }
 
@@ -228,6 +235,24 @@ public final class GameView extends View {
 
   @Override
   public boolean onTouchEvent(MotionEvent e) {
+    if (storyPanel.open && !game.event && !game.gameOver && !defensePanel.open) {
+      storyPanel.touch(
+          e.getAction(),
+          e.getX() / scale,
+          e.getY() / scale,
+          new StoryPanelLayout(H / scale, storyPanel.choiceMode()),
+          storyRenderer);
+      invalidate();
+      return true;
+    }
+    if (e.getAction() == MotionEvent.ACTION_UP
+        && storyRenderer.noticeVisible()
+        && e.getY() / scale >= H / scale - 144
+        && e.getY() / scale <= H / scale - 88) {
+      storyPanel.showMessage(game.story.pendingMessage);
+      invalidate();
+      return true;
+    }
     if (defensePanel.open && !game.gameOver) {
       DefensePanelLayout defenseLayout = defenseRenderer.layout();
       if (defensePanel.scrollTouch(e.getAction(), e.getY() / scale, defenseLayout)) {
@@ -304,6 +329,7 @@ public final class GameView extends View {
     if (game.gameOver) {
       if (y > hh / 2) {
         defensePanel.open = false;
+        storyPanel.close();
         game.reset();
       }
       return true;

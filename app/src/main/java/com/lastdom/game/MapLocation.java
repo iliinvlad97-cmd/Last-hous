@@ -17,7 +17,8 @@ final class MapLocation {
     POLICE,
     WATER,
     HOSPITAL,
-    DISTRICT
+    DISTRICT,
+    STORY
   }
 
   enum Distance {

@@ -24,6 +24,7 @@ final class LootTable {
     LootTable table = new LootTable();
     switch (kind) {
       case DISTRICT:
+      case STORY:
         return table;
       case STORE:
         return table

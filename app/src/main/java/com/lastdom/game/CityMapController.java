@@ -86,6 +86,7 @@ final class CityMapController {
                     .13f,
                     MapLocation.State.LOCKED)));
     points.addAll(ExplorationConfig.destinations());
+    points.add(StoryConfig.location());
     return Collections.unmodifiableList(points);
   }
 
@@ -203,8 +204,11 @@ final class CityMapController {
     if (districtsLayer) {
       for (CityDistrict d : game.cityDistricts)
         visible.add(game.expeditionController.location(d.config.id));
-    } else if (districtFilterId.isEmpty()) visible.addAll(locations);
-    else {
+    } else if (districtFilterId.isEmpty()) {
+      visible.addAll(locations);
+      MapLocation story = game.expeditionController.location(StoryConfig.RADIO);
+      if (!story.isLocked()) visible.add(story);
+    } else {
       CityDistrict d = game.explorationController.district(districtFilterId);
       if (d != null && d.state == CityDistrict.State.EXPLORED)
         for (String id : d.config.points) visible.add(game.expeditionController.location(id));
@@ -296,6 +300,10 @@ final class CityMapController {
       message = "Локация истощена";
       panelScroll = 0;
       return;
+    }
+    if (selected.kind == MapLocation.Kind.STORY) {
+      message = game.storyController.expeditionReason();
+      if (!message.isEmpty()) return;
     }
     if (selected.kind != MapLocation.Kind.DISTRICT
         && (game.expeditionController.active(Expedition.Type.LOOT) != null

@@ -32,6 +32,7 @@ final class SurvivalController {
     return !game.isOnExpedition(r)
         && !game.isBuilding(r)
         && !game.isDefending(r)
+        && !game.isStoryBusy(r)
         && r.job.equals("Отдых");
   }
 
@@ -48,6 +49,7 @@ final class SurvivalController {
     return !game.isOnExpedition(r)
         && !game.isBuilding(r)
         && !game.isDefending(r)
+        && !game.isStoryBusy(r)
         && r.job.equals("Лечится");
   }
 
@@ -56,6 +58,7 @@ final class SurvivalController {
         && !game.isOnExpedition(r)
         && !game.isBuilding(r)
         && !game.isDefending(r)
+        && !game.isStoryBusy(r)
         && !resting(r)
         && !treating(r);
   }
@@ -87,7 +90,11 @@ final class SurvivalController {
   }
 
   private void recoverAI(Resident r) {
-    if (!r.alive || game.isOnExpedition(r) || game.isBuilding(r) || game.isDefending(r)) return;
+    if (!r.alive
+        || game.isOnExpedition(r)
+        || game.isBuilding(r)
+        || game.isDefending(r)
+        || game.isStoryBusy(r)) return;
     boolean medical = medicalStaffAvailable();
     if (r.health < SurvivalConfig.TREAT_START && medical && !treating(r)) {
       if (!r.autoRecovery) r.resumeJob = r.job;
@@ -175,6 +182,7 @@ final class SurvivalController {
       if (!away
           && !game.isBuilding(r)
           && !game.isDefending(r)
+          && !game.isStoryBusy(r)
           && r.hunger < SurvivalConfig.CRITICAL
           && r.thirst < SurvivalConfig.CRITICAL) {
         if (clinic) healthRate += clinicalRate;

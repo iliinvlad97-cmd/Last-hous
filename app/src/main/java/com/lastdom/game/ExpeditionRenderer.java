@@ -123,6 +123,17 @@ final class ExpeditionRenderer {
     }
     lines.add("Отряд: " + names);
     lines.add("Статус: " + expedition.phaseLabel());
+    if (target.kind == MapLocation.Kind.STORY) {
+      Boolean recovered = view.game.story.attemptResults.get(expedition.id);
+      lines.add(
+          recovered == null
+              ? "Сюжетная цель: найти носитель данных"
+              : recovered
+                  ? "Носитель найден; доставка — после возвращения"
+                  : "Носитель не найден. После возвращения можно повторить попытку");
+      if (expedition.state() == Expedition.State.COMPLETED && Boolean.TRUE.equals(recovered))
+        lines.add("Носитель доставлен. Расшифровка: Журнал → Сюжет");
+    }
     if (results) {
       lines.add("НАЙДЕНО / ВЗЯТО С СОБОЙ");
       for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())

@@ -69,6 +69,7 @@ final class RaidController {
     return r.alive
         && !game.isOnExpedition(r)
         && !game.isBuilding(r)
+        && !game.isStoryBusy(r)
         && r.health >= RaidConfig.MIN_HEALTH
         && r.hunger < SurvivalConfig.CRITICAL
         && r.thirst < SurvivalConfig.CRITICAL;
@@ -79,6 +80,7 @@ final class RaidController {
     if (!r.alive || r.health < RaidConfig.MIN_HEALTH)
       return "Недостаточно здоровья (нужно " + RaidConfig.MIN_HEALTH + "%)";
     if (game.isOnExpedition(r)) return "В экспедиции";
+    if (game.isStoryBusy(r)) return "Расшифровывает координаты";
     if (game.isBuilding(r)) return "Занят строительством";
     if (r.hunger >= SurvivalConfig.CRITICAL) return "Критический голод";
     if (r.thirst >= SurvivalConfig.CRITICAL) return "Критическая жажда";

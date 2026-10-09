@@ -207,6 +207,9 @@ def main():
         # Stage 9 adds district discovery only; compare every pre-existing save field.
         # exploration_regression.py separately checks the new fields and legacy migration.
         gameplay_probe = gameplay_probe.replace('k.equals("power")||', 'k.startsWith("exploration9_")||k.startsWith("district9_")||k.equals("power")||')
+        # STORY 1.0 adds only story1_* keys. Compare all historical fields;
+        # story_regression.py verifies these new fields and original ONLINE 0.5 saves.
+        gameplay_probe = gameplay_probe.replace('k.equals("power")||', 'k.startsWith("story1_")||k.equals("power")||')
         fixtures.PROBE = gameplay_probe
         baseline = subprocess.check_output(["git", "show", f"{fixtures.BASELINE}:{fixtures.JAVA_PATH}/MainActivity.java"], cwd=root, text=True)
         original = {"com/lastdom/game/MainActivity.java": baseline, "com/lastdom/game/R.java": current["com/lastdom/game/R.java"]}

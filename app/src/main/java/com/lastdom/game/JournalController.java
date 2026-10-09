@@ -55,7 +55,11 @@ final class JournalController {
       return;
     }
     if (y >= 86 && y <= 126 && x >= 24 && x <= 396) {
-      reports = x >= 210;
+      if (x >= 312) {
+        view.storyPanel.showJournal();
+        return;
+      }
+      reports = x >= 146;
       page = 0;
     } else if (y >= layout.pagerY - 20 && y <= layout.pagerY + 20) {
       page = Math.max(0, Math.min(pages(layout) - 1, page + (x < 210 ? -1 : 1)));

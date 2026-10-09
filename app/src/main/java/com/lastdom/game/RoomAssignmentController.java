@@ -53,6 +53,7 @@ final class RoomAssignmentController {
         || resident == null
         || !resident.alive
         || game.isOnExpedition(resident)
+        || game.isStoryBusy(resident)
         || game.isBuilding(resident)
         || game.isDefending(resident)) return null;
     if (resident.job.equals(job)) return Category.ASSIGNED;

@@ -8,6 +8,7 @@ import java.util.Locale;
  */
 class GameController extends GameState {
 
+  final StoryController storyController = new StoryController(this);
   final ExpeditionController expeditionController = new ExpeditionController(this);
   final ExplorationController explorationController = new ExplorationController(this);
   final RoomUpgradeController roomUpgradeController = new RoomUpgradeController(this);
@@ -74,6 +75,7 @@ class GameController extends GameState {
       location.setState(ExplorationConfig.initialLocationState(location));
     }
     explorationController.reset();
+    storyController.reset();
     for (ExpeditionLoot.Resource resource : ExpeditionLoot.Resource.values())
       expeditionWarehouse.set(resource, 0);
     day = 1;
@@ -121,6 +123,7 @@ class GameController extends GameState {
     if (nextDay) dailyCycle();
     expeditionController.advanceMinute();
     raidController.advanceMinute();
+    storyController.advanceMinute();
     save(); // Atomic survival/resource/clock/phase snapshot, including prepaid ration balances.
   }
 
@@ -166,6 +169,7 @@ class GameController extends GameState {
       RoomUpgradeTask task = roomUpgradeController.taskFor(s);
       return task == null ? -1 : task.room;
     }
+    if (isStoryBusy(s)) return 3;
     if (s.job.equals("Ремонт")) return 0;
     if (s.job.equals("Еда") || s.job.equals("Вода")) return 1;
     if (s.job.equals("Лечение") || s.job.equals("Лечится")) return 2;
@@ -180,6 +184,7 @@ class GameController extends GameState {
       if (homeRoomFor(q) == ri
           && !isBuilding(q)
           && !isDefending(q)
+          && !isStoryBusy(q)
           && !survivalController.treating(q)) {
         if (s.length() > 0) s.append(",");
         s.append(q.name);
@@ -215,7 +220,8 @@ class GameController extends GameState {
       if (people.get(i).alive
           && !isOnExpedition(people.get(i))
           && !isBuilding(people.get(i))
-          && !isDefending(people.get(i))) return i;
+          && !isDefending(people.get(i))
+          && !isStoryBusy(people.get(i))) return i;
     return -1;
   }
 
@@ -240,6 +246,10 @@ class GameController extends GameState {
     return raidController.defending(resident);
   }
 
+  boolean isStoryBusy(Resident resident) {
+    return storyController.busy(resident);
+  }
+
   boolean isBuilding(Resident resident) {
     return resident.status == Resident.Status.BUILDING
         || resident.job.equals("Строительство")
@@ -253,7 +263,8 @@ class GameController extends GameState {
         || !people.get(index).alive
         || isOnExpedition(people.get(index))
         || isBuilding(people.get(index))
-        || isDefending(people.get(index))) return false;
+        || isDefending(people.get(index))
+        || isStoryBusy(people.get(index))) return false;
     people.get(index).job = job;
     people.get(index).autoRecovery = false;
     people.get(index).resumeJob = "";
@@ -331,7 +342,7 @@ class GameController extends GameState {
     }
     if (pick >= 0 && wanted != null) {
       Resident s = people.get(pick);
-      if (!isOnExpedition(s) && !isBuilding(s) && !isDefending(s)) {
+      if (!isOnExpedition(s) && !isBuilding(s) && !isDefending(s) && !isStoryBusy(s)) {
         s.job = wanted;
         addLog(s.name + " автоматически реагирует: " + wanted.toLowerCase() + ".");
       }
@@ -346,6 +357,7 @@ class GameController extends GameState {
           || isOnExpedition(s)
           || isBuilding(s)
           || isDefending(s)
+          || isStoryBusy(s)
           || survivalController.protectedRest(s)
           || survivalController.treating(s)
           || s.health <= SurvivalConfig.CRITICAL_HEALTH) continue;
@@ -398,7 +410,7 @@ class GameController extends GameState {
       raidController.checkDailyThreat();
     } else {
       for (Resident s : people)
-        if (s.alive && !isOnExpedition(s) && !isBuilding(s) && !isDefending(s))
+        if (s.alive && !isOnExpedition(s) && !isBuilding(s) && !isDefending(s) && !isStoryBusy(s))
           s.fatigue = Math.max(0, s.fatigue - (n == 0 ? 15 : 5));
       addLog("Ночь использовали с пользой.");
     }

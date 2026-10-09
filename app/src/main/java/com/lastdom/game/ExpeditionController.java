@@ -50,6 +50,7 @@ final class ExpeditionController {
 
   String unavailableReason(Resident resident) {
     if (resident == null) return "Житель больше не существует";
+    if (game.isStoryBusy(resident)) return "Расшифровывает координаты";
     if (game.isBuilding(resident)) return "Занят строительством";
     if (game.isDefending(resident)) return "Назначен на оборону";
     if (!resident.alive) return "Погиб";
@@ -74,6 +75,10 @@ final class ExpeditionController {
     } else {
       if (target == null || target.kind == MapLocation.Kind.DISTRICT || target.isLocked())
         return "Район не исследован";
+      if (target.kind == MapLocation.Kind.STORY) {
+        String reason = game.storyController.expeditionReason();
+        if (!reason.isEmpty()) return reason;
+      }
       if (target.depleted()) return "Локация истощена";
       if (activeCount(Expedition.Type.LOOT) >= ExpeditionConfig.maxActive(Expedition.Type.LOOT)
           || game.expeditionPerson >= 0) return "Сначала завершите текущую экспедицию";
@@ -274,7 +279,8 @@ final class ExpeditionController {
     expedition.resultGenerated = true;
     MapLocation target = location(expedition.locationId);
     expedition.fatigueGain = 0; // Fatigue is already accumulated by the survival minute clock.
-    target.setDepletion(target.depletion() + 10);
+    if (target.kind == MapLocation.Kind.STORY) game.storyController.research(expedition, early);
+    else target.setDepletion(target.depletion() + 10);
     target.setState(MapLocation.State.SEARCHED);
     expedition.restorePhase(Expedition.State.AWAITING_RETURN, 1, 1, now());
     game.addLog(

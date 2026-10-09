@@ -22,6 +22,7 @@ final class RoomUpgradeController {
   String unavailableReason(Resident resident) {
     if (resident == null) return "Житель больше не существует";
     if (!resident.alive || resident.health <= 0) return "Нет здоровья";
+    if (game.isStoryBusy(resident)) return "Расшифровывает координаты";
     if (game.isOnExpedition(resident)) return "В экспедиции";
     if (game.isBuilding(resident)) return "Занят строительством";
     if (game.isDefending(resident)) return "Назначен на оборону";

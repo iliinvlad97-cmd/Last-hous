@@ -222,13 +222,23 @@ final class CityMapRenderer {
       centered(c, lines[i], x, y - 31 - (lines.length - 1 - i) * 10, 8, locked ? MUTED : INK, true);
     int risk = riskColor(location);
     String badge =
-        locked ? "ЗАКРЫТО" : location.depleted() ? "ИСТОЩЕНА" : location.risk.markerLabel;
+        locked
+            ? "ЗАКРЫТО"
+            : location.kind == MapLocation.Kind.STORY
+                ? "СЮЖЕТ"
+                : location.depleted() ? "ИСТОЩЕНА" : location.risk.markerLabel;
     rounded(c, x - 38, y + 26, x + 38, y + 42, Color.argb(215, 16, 26, 34), 5);
     centered(c, badge, x, y + 37, 7, locked ? MUTED : risk, true);
   }
 
   private void drawIcon(Canvas c, MapLocation.Kind kind, float x, float y, int color) {
-    if (kind == MapLocation.Kind.PHARMACY || kind == MapLocation.Kind.HOSPITAL) {
+    if (kind == MapLocation.Kind.STORY) {
+      line(c, x, y - 13, x - 9, y + 12, 2, color);
+      line(c, x, y - 13, x + 9, y + 12, 2, color);
+      line(c, x - 6, y + 4, x + 6, y + 4, 2, color);
+      line(c, x - 12, y - 9, x - 8, y - 5, 2, color);
+      line(c, x + 12, y - 9, x + 8, y - 5, 2, color);
+    } else if (kind == MapLocation.Kind.PHARMACY || kind == MapLocation.Kind.HOSPITAL) {
       rounded(c, x - 3, y - 11, x + 3, y + 11, color, 1);
       rounded(c, x - 11, y - 3, x + 11, y + 3, color, 1);
       if (kind == MapLocation.Kind.HOSPITAL) {
@@ -325,6 +335,12 @@ final class CityMapRenderer {
 
   private java.util.List<String> locationLines(MapLocation location) {
     java.util.List<String> lines = new java.util.ArrayList<>();
+    if (location.kind == MapLocation.Kind.STORY) {
+      lines.add("ПОСЛЕДНИЙ СИГНАЛ · Неизвестная частота");
+      lines.add(view.game.storyController.objective());
+      lines.add("Носитель будет получен только после возвращения отряда.");
+      lines.add("Неудачную попытку можно повторить; истощение не блокирует сюжет.");
+    }
     lines.add("Добыча: " + location.loot);
     lines.add("Расстояние: " + location.distance.label);
     lines.add("Риск: " + location.risk.label);
