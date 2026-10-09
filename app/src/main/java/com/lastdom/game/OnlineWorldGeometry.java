@@ -116,6 +116,14 @@ final class OnlineWorldGeometry {
     return x >= 34 && x <= 386 && y >= panelBottom - 114 && y <= panelBottom - 76;
   }
 
+  boolean secondaryLeft(float x, float y, boolean trade) {
+    return secondary(x, y) && x <= (trade ? 300 : 204);
+  }
+
+  boolean secondaryRight(float x, float y, boolean trade) {
+    return secondary(x, y) && x >= (trade ? 310 : 216);
+  }
+
   boolean closeButton(float x, float y) {
     return x >= 34 && x <= 386 && y >= panelBottom - 66 && y <= panelBottom - 24;
   }

@@ -34,7 +34,7 @@ PROBE = exploration.PROBE[:exploration.PROBE.index(' static void defaults()')] +
  }
  static void scaledInput(){
   for(int width:new int[]{420,840})for(int height:new int[]{500,640,840,1200}){
-   GameView v=demo(width,height);v.cityMap.districtsLayer=true;String saved=snapshot(v);int calls=android.os.Handler.delays.size();radio(v);require(android.os.Handler.delays.size()==calls,"opening map starts no extra gameplay timer");require(v.cityMap.districtsLayer,"solo map selection/layer retained");Canvas c=draw(v);text(c,"ДЕМО-РЕЖИМ");text(c,"ONLINE 0.1");text(c,"ДОМ");text(c,"ЖУРНАЛ");text(c,"КАРТА");text(c,"ЖИТЕЛИ");
+   GameView v=demo(width,height);v.cityMap.districtsLayer=true;String saved=snapshot(v);int calls=android.os.Handler.delays.size();radio(v);require(android.os.Handler.delays.size()==calls,"opening map starts no extra gameplay timer");require(v.cityMap.districtsLayer,"solo map selection/layer retained");Canvas c=draw(v);text(c,"ДЕМО-РЕЖИМ");text(c,"ONLINE 0.2");text(c,"ДОМ");text(c,"ЖУРНАЛ");text(c,"КАРТА");text(c,"ЖИТЕЛИ");
    OnlineWorldGeometry g=geometry(v);require(g.bottom<v.H/v.scale-78&&g.panelBottom<v.H/v.scale-78,"world and cards never cover navigation");
    for(OnlineShelter shelter:v.onlineWorld.state.shelters){tap(v,g.x(shelter.position.x),g.y(shelter.position.y));require(v.onlineWorld.state.shelter()==shelter&&v.game.screen==GameView.ONLINE_WORLD,"select real repository shelter "+shelter.id);frame(v,16_666_667);text(draw(v),"ВИРТУАЛЬНОЕ УБЕЖИЩЕ");text(draw(v),shelter.name);text(draw(v),"Уровень: "+shelter.level);text(draw(v),shelter.linkDescription);closeCard(v);require(!v.onlineWorld.state.selected(),"close pinned above navigation");}
    for(OnlineZone zone:v.onlineWorld.state.zones){clickZone(v,zone);draw(v);text(draw(v),zone.name);text(draw(v),"Опасность: "+zone.danger);closeCard(v);}
@@ -56,7 +56,7 @@ PROBE = exploration.PROBE[:exploration.PROBE.index(' static void defaults()')] +
    v.onTouchEvent(new MotionEvent(180*v.scale,(g.panelBottom-40)*v.scale,MotionEvent.ACTION_DOWN));v.onTouchEvent(new MotionEvent(180*v.scale,(g.panelBottom-90)*v.scale,MotionEvent.ACTION_MOVE));v.onTouchEvent(new MotionEvent(180*v.scale,(g.panelBottom-90)*v.scale,MotionEvent.ACTION_UP));require(v.onlineWorld.state.confirmingPvp&&!v.onlineWorld.state.pvpEnabled,"swipe between pinned buttons cannot confirm consent");
    tap(v,180,g.panelBottom-90);require(v.onlineWorld.state.pvpEnabled&&!v.onlineWorld.state.confirmingPvp,"separate explicit confirmation changes only demo consent");draw(v);text(draw(v),"ВЫКЛЮЧИТЬ PvP (ДЕМО)");require(before.equals(snapshot(v)),"no resource costs, damage, new expeditions or save changes for PvP consent");
    tap(v,180,g.panelBottom-90);require(!v.onlineWorld.state.pvpEnabled,"PvP demo can be disabled immediately");closeCard(v);require(before.equals(snapshot(v)),"closing demo can't grant or remove anything");
-   v.game.save();GameView restored=new GameView(new Context());require(!restored.onlineWorld.state.pvpEnabled&&restored.game.screen==GameView.HOME,"restart resets only demo consent, not solo progress");require(before.equals(snapshot(restored))&&Context.preferenceName.equals("save_v02"),"demo has no save_v02 keys or new shared preference writes");
+   v.game.save();GameView restored=new GameView(new Context());require(!restored.onlineWorld.state.pvpEnabled&&restored.game.screen==GameView.HOME,"restart retains disabled demo preparation and solo progress");require(before.equals(snapshot(restored))&&Context.preferenceName.equals("save_v02"),"demo has no save_v02 keys; separate online persistence");
   }
  }
  static void snapshotRefresh(){
@@ -71,7 +71,7 @@ PROBE = exploration.PROBE[:exploration.PROBE.index(' static void defaults()')] +
    OnlineWorldRepository provider=()->new OnlineWorldRepository.Snapshot(connection,data.shelters,data.zones,data.squads,data.streets,data.buildings,data.towers,data.mist);
    OnlineWorldController c=new OnlineWorldController(provider,()->0);OnlineWorldGeometry g=c.geometry(840);c.touch(MotionEvent.ACTION_UP,g.x(.90f),g.y(.20f),g);
    require(c.state.connection==connection&&!connection.badge.isEmpty()&&!connection.description.isEmpty(),"repository status is preserved for future adapters "+connection);
-   if(connection!=OnlineWorldState.Connection.DEMO){require(!c.pvpActionAvailable(),"ONLINE 0.1 demo consent cannot become live PvP");c.touch(MotionEvent.ACTION_UP,180,g.panelBottom-90,g);c.touch(MotionEvent.ACTION_UP,180,g.panelBottom-90,g);require(!c.state.pvpEnabled&&!c.state.confirmingPvp,"non-demo status exposes no fake live combat actions");}
+   if(connection!=OnlineWorldState.Connection.DEMO){require(!c.pvpActionAvailable(),"demo consent cannot become live PvP");c.touch(MotionEvent.ACTION_UP,180,g.panelBottom-90,g);c.touch(MotionEvent.ACTION_UP,180,g.panelBottom-90,g);require(!c.state.pvpEnabled&&!c.state.confirmingPvp,"non-demo status exposes no fake live combat actions");}
   }
   GameView v=demo(840,360);radio(v);OnlineWorldGeometry g=geometry(v);OnlineShelter shelter=v.onlineWorld.state.shelters.get(1);tap(v,g.x(shelter.position.x),g.y(shelter.position.y));draw(v);require(g.contentBottom>g.contentTop&&g.panelTop+65<g.panelBottom-114,"minimum viewport still separates title/content/actions");closeCard(v);require(!v.onlineWorld.state.selected(),"minimum viewport close remains available");
  }

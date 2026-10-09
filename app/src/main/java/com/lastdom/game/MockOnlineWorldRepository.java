@@ -2,11 +2,151 @@ package com.lastdom.game;
 
 import java.util.*;
 
-/**
- * Explicitly fictional sites and patrol. This repository has no Android or network dependencies.
- */
+/** Fictional world and atomic local demo commands. Persistence is isolated behind a save store. */
 final class MockOnlineWorldRepository implements OnlineWorldRepository {
-  public Snapshot load() {
+  private final OnlineDemoSaveStore store;
+  private final Snapshot world;
+  private OnlineWorldGameplay.Data data;
+  private boolean storageError;
+
+  MockOnlineWorldRepository() {
+    this(new OnlineDemoSaveStore(null));
+  }
+
+  MockOnlineWorldRepository(OnlineDemoSaveStore store) {
+    this.store = store;
+    world = createWorld();
+    try {
+      data = OnlineDemoSaveStore.decode(store.read(), this);
+    } catch (RuntimeException invalidSave) {
+      storageError = true;
+      data =
+          new OnlineWorldGameplay.Data(
+              new OnlineInventory(Collections.emptyMap()),
+              OnlineWorldGameplay.catalogue(),
+              Collections.emptyList(),
+              0,
+              "");
+    }
+  }
+
+  public synchronized Snapshot load() {
+    if (!storageError) return world;
+    return new Snapshot(
+        OnlineWorldState.Connection.ERROR,
+        world.shelters,
+        world.zones,
+        world.squads,
+        world.streets,
+        world.buildings,
+        world.towers,
+        world.mist);
+  }
+
+  public synchronized boolean writable() {
+    return !storageError;
+  }
+
+  public synchronized OnlineWorldGameplay.Data gameplay() {
+    return data;
+  }
+
+  private OnlineWorldGameplay.Result publish(OnlineWorldGameplay.Data replacement, String message) {
+    if (storageError)
+      return new OnlineWorldGameplay.Result(
+          false, "Ошибка демо-сохранения. Одиночная игра не затронута.");
+    boolean saved;
+    try {
+      saved = store.write(replacement);
+    } catch (RuntimeException writeError) {
+      saved = false;
+    }
+    if (!saved) {
+      storageError = true;
+      return new OnlineWorldGameplay.Result(
+          false, "Не удалось сохранить действие. Повторите после перезапуска.");
+    }
+    data = replacement;
+    return new OnlineWorldGameplay.Result(true, message);
+  }
+
+  public synchronized OnlineWorldGameplay.Result execute(String id, OnlineWorldGameplay.Kind kind) {
+    if (storageError)
+      return new OnlineWorldGameplay.Result(
+          false, "Действия заблокированы: ошибка демо-сохранения");
+    OnlineWorldGameplay.Offer offer = data.offer(id);
+    if (offer == null || offer.kind != kind)
+      return new OnlineWorldGameplay.Result(false, "Неизвестное предложение");
+    String reason = data.unavailable(offer);
+    if (!reason.isEmpty()) return new OnlineWorldGameplay.Result(false, reason);
+    OnlineInventory inventory =
+        data.inventory.exchange(offer.cost, offer.quantity, offer.reward, offer.output);
+    List<OnlineWorldGameplay.Operation> operations = new ArrayList<>(data.operations);
+    operations.add(operation(offer, 0));
+    return publish(
+        new OnlineWorldGameplay.Data(
+            inventory, data.offers, operations, data.reputation + offer.reputation, data.pvpZoneId),
+        offer.kind == OnlineWorldGameplay.Kind.HELP
+            ? "Помощь отправлена. Репутация +" + offer.reputation
+            : "Сделка выполнена. " + offer.summary());
+  }
+
+  public synchronized OnlineWorldGameplay.Result preparePvp(String zoneId, boolean consent) {
+    if (!consent || !"pvp_frontier".equals(zoneId))
+      return new OnlineWorldGameplay.Result(false, "Требуется добровольное подтверждение");
+    if (!data.pvpZoneId.isEmpty())
+      return new OnlineWorldGameplay.Result(false, "Демо-отряд уже подготовлен");
+    return publish(
+        new OnlineWorldGameplay.Data(
+            data.inventory, data.offers, data.operations, data.reputation, zoneId),
+        "Демо-отряд подготовлен. Бой не запускается.");
+  }
+
+  public synchronized OnlineWorldGameplay.Result disablePvp() {
+    if (data.pvpZoneId.isEmpty()) return new OnlineWorldGameplay.Result(false, "PvP уже выключено");
+    return publish(
+        new OnlineWorldGameplay.Data(
+            data.inventory, data.offers, data.operations, data.reputation, ""),
+        "Демо-подготовка отменена");
+  }
+
+  public synchronized boolean advanceSecond() {
+    if (storageError || !data.hasActive()) return false;
+    List<OnlineWorldGameplay.Operation> operations = new ArrayList<>();
+    for (OnlineWorldGameplay.Operation operation : data.operations)
+      operations.add(operation.active() ? operation.advance() : operation);
+    return publish(
+            new OnlineWorldGameplay.Data(
+                data.inventory, data.offers, operations, data.reputation, data.pvpZoneId),
+            "")
+        .success;
+  }
+
+  OnlineWorldGameplay.Operation operation(OnlineWorldGameplay.Offer offer, int elapsed) {
+    String origin = "demo_ember", target = offer.shelterId;
+    float[] coordinates;
+    switch (target) {
+      case "demo_ember":
+        origin = "demo_beacon";
+        coordinates = new float[] {.23f, .21f, .23f, .315f, .50f, .315f, .50f, .77f, .22f, .77f};
+        break;
+      case "demo_beacon":
+        coordinates = new float[] {.22f, .77f, .50f, .77f, .50f, .315f, .23f, .315f, .23f, .21f};
+        break;
+      case "demo_foundry":
+        coordinates = new float[] {.22f, .77f, .50f, .77f, .50f, .52f, .27f, .52f, .27f, .45f};
+        break;
+      case "demo_outpost":
+        coordinates = new float[] {.22f, .77f, .50f, .77f, .50f, .585f, .75f, .585f, .75f, .70f};
+        break;
+      default:
+        throw new IllegalArgumentException("Unknown demo delivery target");
+    }
+    return new OnlineWorldGameplay.Operation(
+        offer, origin, target, new OnlineRoute(coordinates), elapsed);
+  }
+
+  private static Snapshot createWorld() {
     List<OnlineShelter> shelters =
         Arrays.asList(
             new OnlineShelter(
@@ -157,7 +297,9 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
             new OnlineWorldGeometry.Shape(.02f, .77f, .50f, .77f, .98f, .82f),
             new OnlineWorldGeometry.Shape(.27f, .33f, .27f, .585f),
             new OnlineWorldGeometry.Shape(.73f, .03f, .73f, .315f, .85f, .45f),
-            new OnlineWorldGeometry.Shape(.08f, .52f, .50f, .52f));
+            new OnlineWorldGeometry.Shape(.08f, .52f, .50f, .52f),
+            new OnlineWorldGeometry.Shape(.23f, .21f, .23f, .315f),
+            new OnlineWorldGeometry.Shape(.75f, .585f, .75f, .70f));
     List<OnlineWorldGeometry.Block> blocks = new ArrayList<>();
     float[][] rectangles = {
       {.065f, .09f, .07f, .09f}, {.31f, .12f, .08f, .08f}, {.10f, .23f, .065f, .055f},

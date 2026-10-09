@@ -33,6 +33,8 @@ public final class GameView extends View {
             defensePanel.pending();
             invalidate();
           }
+          onlineWorld.advanceSecond();
+          if (game.screen == ONLINE_WORLD) invalidate();
           timer.postDelayed(this, 1000);
         }
       };
@@ -62,7 +64,11 @@ public final class GameView extends View {
       new ExpeditionPreparationRenderer(this);
 
   public GameView(Context context) {
-    this(context, new MockOnlineWorldRepository(), System::nanoTime);
+    this(
+        context,
+        new MockOnlineWorldRepository(
+            new OnlineDemoSaveStore(context.getSharedPreferences(OnlineDemoSaveStore.FILE, 0))),
+        System::nanoTime);
   }
 
   GameView(

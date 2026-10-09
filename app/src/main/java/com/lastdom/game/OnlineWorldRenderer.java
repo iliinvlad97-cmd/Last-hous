@@ -50,9 +50,48 @@ final class OnlineWorldRenderer {
     for (int i = 0; i < state.snapshot.towers.size(); i++)
       drawTower(c, g, state.snapshot.towers.get(i), state.animationSeconds + i);
     for (OnlineSquad squad : state.squads) {
+      if (!squad.id.equals(state.squadId)) continue;
       shape(c, g, squad.route, false);
       style(Color.argb(115, 88, 156, 184), Paint.Style.STROKE, 1.5f);
       c.drawPath(path, paint);
+    }
+    for (int i = 0; i < state.gameplay.operations.size(); i++) {
+      OnlineWorldGameplay.Operation operation = state.gameplay.operations.get(i);
+      if (!operation.active()) continue;
+      shape(c, g, operation.route.shape, false);
+      style(
+          alpha(
+              operation.offer.kind == OnlineWorldGameplay.Kind.HELP ? view.good : view.accent, 170),
+          Paint.Style.STROKE,
+          2);
+      c.drawPath(path, paint);
+      float x = g.x(state.deliveryPositions[i * 2]), y = g.y(state.deliveryPositions[i * 2 + 1]);
+      circle(c, x, y, 10, alpha(view.accent, 65), Paint.Style.FILL, 0);
+      circle(
+          c,
+          x,
+          y,
+          5,
+          operation.offer.kind == OnlineWorldGameplay.Kind.HELP ? view.good : view.accent,
+          Paint.Style.FILL,
+          0);
+      circle(
+          c,
+          g.x(operation.route.shape.x(0)),
+          g.y(operation.route.shape.y(0)),
+          3,
+          view.blue,
+          Paint.Style.STROKE,
+          1.5f);
+      int end = operation.route.shape.size() - 1;
+      circle(
+          c,
+          g.x(operation.route.shape.x(end)),
+          g.y(operation.route.shape.y(end)),
+          7,
+          view.accent,
+          Paint.Style.STROKE,
+          1.5f);
     }
     for (int i = 0; i < state.shelters.size(); i++)
       drawShelter(c, g, state.shelters.get(i), i, state);
@@ -60,6 +99,8 @@ final class OnlineWorldRenderer {
     drawAtmosphere(c, g, state);
     c.restore();
     drawHeader(c, state);
+    if (state.confirmationGlow > .01f)
+      view.box(c, 18, 108, 402, 112, alpha(view.good, (int) (state.confirmationGlow * 200)), 2);
     view.hudRenderer.drawNav(c);
     if (state.selected()) panel.draw(c, g);
   }
@@ -67,10 +108,10 @@ final class OnlineWorldRenderer {
   private void drawHeader(Canvas c, OnlineWorldState state) {
     view.box(c, 20, 12, 96, 56, view.panel2, 9);
     view.bold(c, "‹ КАРТА", 30, 39, 11, view.text);
-    view.bold(c, "ONLINE 0.1", 112, 29, 18, view.text);
+    view.bold(c, "ONLINE 0.2", 112, 29, 18, view.text);
     view.txt(c, "РАДИОСЕТЬ", 113, 49, 10, view.muted);
     view.box(c, 300, 12, 400, 56, Color.rgb(58, 44, 29), 9);
-    view.bold(c, state.connection.badge, 308, 39, 11, view.accent);
+    view.bold(c, "ЗАПАСЫ", 308, 39, 11, view.accent);
     view.bold(c, state.connection.description, 20, 76, 12, view.accent);
     view.txt(c, "БЕЗОПАСНО", 20, 98, 10, view.good);
     view.txt(c, "PvE", 155, 98, 10, view.accent);
@@ -233,6 +274,7 @@ final class OnlineWorldRenderer {
     circle(c, x, y, 5, Color.rgb(129, 205, 230), Paint.Style.FILL, 0);
     line(c, x - 3, y, x + 3, y, 1, view.bg);
     line(c, x, y - 3, x, y + 3, 1, view.bg);
+    center(c, "ДОЗОР", x, y - 13, 8, view.blue);
   }
 
   private void drawAtmosphere(Canvas c, OnlineWorldGeometry g, OnlineWorldState state) {

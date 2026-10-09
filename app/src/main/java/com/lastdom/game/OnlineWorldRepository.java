@@ -2,9 +2,33 @@ package com.lastdom.game;
 
 import java.util.*;
 
-/** Data boundary only. A future adapter can supply snapshots; ONLINE 0.1 performs no networking. */
+/** World data and authoritative demo commands. No live network adapter is enabled. */
 interface OnlineWorldRepository {
   Snapshot load();
+
+  default OnlineWorldGameplay.Data gameplay() {
+    return OnlineWorldGameplay.Data.initial();
+  }
+
+  default OnlineWorldGameplay.Result execute(String offerId, OnlineWorldGameplay.Kind kind) {
+    return new OnlineWorldGameplay.Result(false, "Действия недоступны для этого источника");
+  }
+
+  default OnlineWorldGameplay.Result preparePvp(String zoneId, boolean consent) {
+    return new OnlineWorldGameplay.Result(false, "Подготовка недоступна для этого источника");
+  }
+
+  default OnlineWorldGameplay.Result disablePvp() {
+    return new OnlineWorldGameplay.Result(false, "Действие недоступно");
+  }
+
+  default boolean writable() {
+    return false;
+  }
+
+  default boolean advanceSecond() {
+    return false;
+  }
 
   final class Snapshot {
     final OnlineWorldState.Connection connection;

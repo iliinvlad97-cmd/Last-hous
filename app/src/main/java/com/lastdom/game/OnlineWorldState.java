@@ -24,6 +24,24 @@ final class OnlineWorldState {
   final List<OnlineSquad> squads;
   final OnlineWorldRepository.Snapshot snapshot;
   final float[] squadPositions;
+
+  enum Panel {
+    OBJECT,
+    TRADE,
+    HELP,
+    INVENTORY,
+    HISTORY,
+    DELIVERY
+  }
+
+  Panel panel = Panel.OBJECT;
+  OnlineWorldGameplay.Data gameplay;
+  String offerId = "", deliveryId = "", result = "";
+  final double[] deliverySeconds;
+  final float[] deliveryPositions;
+  float confirmationGlow;
+  boolean resultSuccess;
+
   String shelterId = "", zoneId = "", squadId = "";
   boolean pvpEnabled, confirmingPvp;
   double animationSeconds;
@@ -31,6 +49,13 @@ final class OnlineWorldState {
   int panelScroll;
 
   OnlineWorldState(OnlineWorldRepository.Snapshot snapshot) {
+    this(snapshot, OnlineWorldGameplay.Data.initial());
+  }
+
+  OnlineWorldState(OnlineWorldRepository.Snapshot snapshot, OnlineWorldGameplay.Data gameplay) {
+    this.gameplay = gameplay;
+    deliverySeconds = new double[gameplay.offers.size()];
+    deliveryPositions = new float[gameplay.offers.size() * 2];
     this.snapshot = snapshot;
     connection = snapshot.connection;
     shelters = snapshot.shelters;
@@ -55,7 +80,20 @@ final class OnlineWorldState {
     return null;
   }
 
+  OnlineWorldGameplay.Offer offer() {
+    return gameplay.offer(offerId);
+  }
+
+  OnlineWorldGameplay.Operation delivery() {
+    return gameplay.operation(deliveryId);
+  }
+
+  String shelterName(String id) {
+    for (OnlineShelter shelter : shelters) if (shelter.id.equals(id)) return shelter.name;
+    return id;
+  }
+
   boolean selected() {
-    return !shelterId.isEmpty() || !zoneId.isEmpty() || !squadId.isEmpty();
+    return panel != Panel.OBJECT || !shelterId.isEmpty() || !zoneId.isEmpty() || !squadId.isEmpty();
   }
 }

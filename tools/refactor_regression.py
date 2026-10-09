@@ -48,7 +48,8 @@ package android.content;
 public class Context {
  public static MemoryPreferences preferences=new MemoryPreferences();
  public static String preferenceName;
- public SharedPreferences getSharedPreferences(String name,int mode){preferenceName=name;return preferences;}
+ public static final java.util.Map<String,MemoryPreferences> namedPreferences=new java.util.HashMap<>();
+ public SharedPreferences getSharedPreferences(String name,int mode){preferenceName=name;return name.equals("save_v02")?preferences:namedPreferences.computeIfAbsent(name,k->new MemoryPreferences());}
  public android.content.res.Resources getResources(){return new android.content.res.Resources();}
 }
 ''',
