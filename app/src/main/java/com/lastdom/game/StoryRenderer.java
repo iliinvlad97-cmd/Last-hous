@@ -71,7 +71,7 @@ final class StoryRenderer {
     view.box(c, 0, 0, 420, view.H / view.scale - 80, Color.argb(220, 5, 10, 15), 0);
     view.box(c, 18, l.top, 402, l.bottom, view.panel, 16);
     view.bold(c, p.title(), 32, l.top + 32, 14, view.accent);
-    view.txt(c, "STORY 1.1 · локальная кампания", 32, l.top + 50, 10, view.muted);
+    view.txt(c, "STORY 1.1.1 · локальная кампания", 32, l.top + 50, 10, view.muted);
     c.save();
     c.clipRect(view.sy(28), view.sy(l.contentTop), view.sy(392), view.sy(l.contentBottom));
     for (int i = 0; i < lines.size(); i++) {

@@ -59,6 +59,7 @@ final class StoryPanelController {
   }
 
   void showJournal() {
+    view.game.storyController.activateVoices();
     open = true;
     mode = Mode.JOURNAL;
     scroll = 0;
@@ -164,6 +165,10 @@ final class StoryPanelController {
         rows.add(new Row((choiceId.equals(choice.id) ? "✓ " : "") + choice.label, choice.id, true));
     } else {
       row("Глава 1 · Последний сигнал");
+      if (s.voicesStage == 0) {
+        String reason = view.game.storyController.voicesBlockedReason();
+        if (!reason.isEmpty()) row("Голоса в эфире · недоступно: " + reason);
+      }
       if (s.voicesStage > 0) {
         row(
             "ГОЛОСА В ЭФИРЕ · "

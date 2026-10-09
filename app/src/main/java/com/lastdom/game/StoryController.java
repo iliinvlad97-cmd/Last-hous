@@ -36,6 +36,7 @@ final class StoryController {
         state.specialistId = "";
       } else r.job = "Расшифровка";
     }
+    activateVoices();
     prompt = !state.pendingMessage.isEmpty();
   }
 
@@ -109,14 +110,31 @@ final class StoryController {
         && !state.flags.contains(StoryFlags.SECRET);
   }
 
+  String voicesBlockedReason() {
+    if (state.voicesStage != 0) return "";
+    if (state.phase != StoryState.Phase.CHAIN_COMPLETE)
+      return "Завершите «Неизвестную частоту» и подтвердите первое решение";
+    if (state.decisionId.isEmpty()) return "В сохранении нет подтверждённого первого решения";
+    if (!state.decisionId.equals(StoryConfig.SHARE.id)
+        && !state.decisionId.equals(StoryConfig.SECRET.id))
+      return "Неизвестный ID первого решения: " + state.decisionId;
+    if (state.flags.contains(StoryFlags.SHARE) && state.flags.contains(StoryFlags.SECRET))
+      return "Сохранение содержит противоречащие флаги первого решения";
+    String expected =
+        state.decisionId.equals(StoryConfig.SHARE.id) ? StoryFlags.SHARE : StoryFlags.SECRET;
+    if (!state.flags.contains(expected)) return "Нет флага сохранённого решения: " + expected;
+    return "";
+  }
+
+  /** Reconcile existing saves without advancing time or replaying completed conversations. */
+  void activateVoices() {
+    if (state.voicesStage != 0) return;
+    startVoices();
+    if (state.voicesStage != 0) game.save();
+  }
+
   void startVoices() {
-    boolean secret =
-        state.decisionId.equals(StoryConfig.SECRET.id)
-            && state.flags.contains(StoryFlags.SECRET)
-            && !state.flags.contains(StoryFlags.SHARE);
-    if (state.voicesStage != 0
-        || state.phase != StoryState.Phase.CHAIN_COMPLETE
-        || (!publicBranch() && !secret)) return;
+    if (state.voicesStage != 0 || !voicesBlockedReason().isEmpty()) return;
     state.voicesStage = 1;
     state.questId = StoryConfig.VOICES.id;
     for (Resident r : game.people)
@@ -310,6 +328,7 @@ final class StoryController {
     state.flags.add(c.flag);
     state.objectives.add("choice");
     state.phase = StoryState.Phase.CHAIN_COMPLETE;
+    startVoices();
     game.addLog(
         "Последний сигнал: " + c.label + ". Решение сохранено; дальнейшее выживание продолжается.");
     game.save();
