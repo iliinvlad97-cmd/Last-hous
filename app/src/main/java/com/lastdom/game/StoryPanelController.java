@@ -27,7 +27,7 @@ final class StoryPanelController {
   boolean open;
   Mode mode = Mode.JOURNAL;
   String messageId = "", selectedId = "", choiceId = "", result = "";
-  int scroll, revision;
+  int scroll, revision, dialogueStep, response = -1;
   private float dragY, startY;
   private boolean dragging, moved;
   final List<Row> rows = new ArrayList<>();
@@ -71,8 +71,10 @@ final class StoryPanelController {
     open = true;
     mode = Mode.MESSAGE;
     messageId = id;
+    if (view.game.story.pendingMessage.equals(id)) view.game.storyController.prompt = false;
     scroll = 0;
     result = choiceId = "";
+    response = -1;
     refresh();
   }
 
@@ -104,8 +106,31 @@ final class StoryPanelController {
     if (!result.isEmpty()) row(result);
     if (mode == Mode.MESSAGE) {
       StoryEvent e = StoryConfig.event(messageId);
-      row(e.source);
-      row(e.text);
+      StoryDialogue d = StoryDialogue.find(messageId);
+      if (d == null) {
+        row(e.source);
+        row(e.text);
+      } else if (s.completedDialogues.contains(messageId)) {
+        row("РАЗГОВОР ЗАВЕРШЁН · история");
+        for (int i = 0; i < d.lines.length; i++) {
+          String key = messageId + "." + i;
+          row(s.transcripts.getOrDefault(key, view.game.storyController.dialogueText(d, i)));
+          if (s.answers.containsKey(key)) row("Ваш ответ: " + s.answers.get(key));
+        }
+      } else {
+        dialogueStep = view.game.storyController.step(d);
+        if (dialogueStep >= d.lines.length) row("Разговор завершён");
+        else {
+          row("Реплика " + (dialogueStep + 1) + " / " + d.lines.length);
+          row(view.game.storyController.dialogueText(d, dialogueStep));
+          for (int i = 0; i < d.lines[dialogueStep].responses.length; i++)
+            rows.add(
+                new Row(
+                    (response == i ? "✓ " : "") + d.lines[dialogueStep].responses[i],
+                    Integer.toString(i),
+                    true));
+        }
+      }
     } else if (mode == Mode.SPECIALIST) {
       row("Мастерская · 60 игровых минут. Специалист временно прекращает свою работу.");
       if (!view.game.storyController.workshopAvailable())
@@ -139,6 +164,35 @@ final class StoryPanelController {
         rows.add(new Row((choiceId.equals(choice.id) ? "✓ " : "") + choice.label, choice.id, true));
     } else {
       row("Глава 1 · Последний сигнал");
+      if (s.voicesStage > 0) {
+        row(
+            "ГОЛОСА В ЭФИРЕ · "
+                + (s.voicesStage == 6 ? "Выполнено" : "Этап " + s.voicesStage + " / 5"));
+        String[] goals = {
+          "",
+          "Прочитать сообщение Евы",
+          "Обсудить сигнал с жителями",
+          "Поговорить с Евой",
+          "Узнать последствия решения",
+          "Прочитать зацепку",
+          "Архив станции 17 · продолжение пока недоступно"
+        };
+        row(goals[s.voicesStage]);
+        for (StoryObjective o : StoryConfig.VOICES.objectives)
+          row((s.objectives.contains(o.id) ? "✓ " : "○ ") + o.text);
+        row("Доверие Евы: " + s.evaTrust + " / 100 (сюжетное)");
+        for (Map.Entry<String, String> person : s.residentIds.entrySet())
+          row(
+              "Отношение · "
+                  + person.getKey()
+                  + ": "
+                  + s.attitudes.getOrDefault(person.getValue(), 50)
+                  + " / 100");
+        if (s.flags.contains(StoryFlags.PUBLIC_SIGNAL))
+          row("Последствие: Сигнал услышан · PUBLIC_SIGNAL");
+        if (s.flags.contains(StoryFlags.SECRET_SIGNAL))
+          row("Последствие: Тихая частота · SECRET_SIGNAL");
+      }
       row(s.phase == StoryState.Phase.DORMANT ? "Задание ещё не получено" : StoryConfig.FIRST.name);
       row(view.game.storyController.objective());
       row(
@@ -169,6 +223,11 @@ final class StoryPanelController {
         row("ПОСЛЕДНЕЕ СООБЩЕНИЕ · " + last.source);
         row(last.text);
       }
+      if (!s.answers.isEmpty()) {
+        row("ОТВЕТЫ В РАЗГОВОРАХ");
+        for (Map.Entry<String, String> a : s.answers.entrySet())
+          row("Ева · ваш ответ: " + a.getValue());
+      }
       row("СООБЩЕНИЯ · можно перечитать");
       for (int i = s.messages.size() - 1; i >= 0; i--) {
         StoryEvent e = StoryConfig.event(s.messages.get(i));
@@ -185,7 +244,13 @@ final class StoryPanelController {
   }
 
   String primary() {
-    if (mode == Mode.MESSAGE) return "ПРОДОЛЖИТЬ";
+    if (mode == Mode.MESSAGE)
+      return view.game.story.completedDialogues.contains(messageId)
+          ? "К СЮЖЕТНОМУ ЖУРНАЛУ"
+          : "ПРОДОЛЖИТЬ";
+    if (mode == Mode.JOURNAL
+        && !view.game.story.pendingMessage.isEmpty()
+        && view.game.story.voicesStage > 0) return "ОТКРЫТЬ РАЗГОВОР";
     if (mode == Mode.CHOICE) return "ПОДТВЕРДИТЬ РЕШЕНИЕ";
     if (mode == Mode.SPECIALIST) return "НАЧАТЬ РАСШИФРОВКУ";
     StoryState.Phase p = view.game.story.phase;
@@ -199,6 +264,12 @@ final class StoryPanelController {
   }
 
   boolean primaryEnabled() {
+    StoryDialogue d = StoryDialogue.find(messageId);
+    if (mode == Mode.MESSAGE
+        && d != null
+        && !view.game.story.completedDialogues.contains(messageId))
+      return dialogueStep < d.lines.length
+          && (d.lines[dialogueStep].responses.length == 0 || response >= 0);
     if (mode == Mode.CHOICE)
       return !choiceId.isEmpty()
           && view.game.story.phase == StoryState.Phase.DECISION
@@ -225,14 +296,31 @@ final class StoryPanelController {
       return;
     }
     if (mode == Mode.MESSAGE) {
-      view.game.storyController.read(messageId);
-      showJournal();
+      StoryDialogue d = StoryDialogue.find(messageId);
+      if (d != null && !view.game.story.completedDialogues.contains(messageId)) {
+        result = view.game.storyController.continueDialogue(messageId, dialogueStep, response);
+        response = -1;
+        scroll = 0;
+        if (result.isEmpty() && view.game.story.completedDialogues.contains(messageId)) {
+          String next = view.game.story.pendingMessage;
+          view.game.storyController.prompt = false;
+          if (!next.isEmpty()) showMessage(next);
+          else showJournal();
+        } else refresh();
+      } else {
+        view.game.storyController.read(messageId);
+        showJournal();
+      }
       return;
     }
     if (mode == Mode.SPECIALIST) {
       result = view.game.storyController.decode(selectedId);
       if (result.isEmpty()) showJournal();
       else refresh();
+      return;
+    }
+    if (!view.game.story.pendingMessage.isEmpty() && view.game.story.voicesStage > 0) {
+      showMessage(view.game.story.pendingMessage);
       return;
     }
     switch (view.game.story.phase) {
@@ -298,7 +386,10 @@ final class StoryPanelController {
       if (index < 0 || index >= rows.size()) return;
       Row row = rows.get(index);
       if (!row.action) return;
-      if (mode == Mode.JOURNAL) showMessage(row.id);
+      if (mode == Mode.MESSAGE) {
+        response = Integer.parseInt(row.id);
+        refresh();
+      } else if (mode == Mode.JOURNAL) showMessage(row.id);
       else if (mode == Mode.CHOICE) {
         choiceId = row.id;
         refresh();

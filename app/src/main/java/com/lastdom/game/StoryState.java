@@ -13,6 +13,13 @@ final class StoryState {
     CHAIN_COMPLETE
   }
 
+  int voicesStage, evaTrust = StoryDialogue.INITIAL_TRUST;
+  final Map<String, Integer> dialogueSteps = new LinkedHashMap<>(),
+      attitudes = new LinkedHashMap<>();
+  final Map<String, String> answers = new LinkedHashMap<>(), residentIds = new LinkedHashMap<>();
+  final Map<String, String> transcripts = new LinkedHashMap<>();
+  final Set<String> completedDialogues = new LinkedHashSet<>();
+
   Phase phase = Phase.DORMANT;
   String chapterId = "chapter.last_signal",
       questId = "",
@@ -32,6 +39,14 @@ final class StoryState {
   final Map<String, Boolean> attemptResults = new LinkedHashMap<>();
 
   void reset() {
+    voicesStage = 0;
+    evaTrust = StoryDialogue.INITIAL_TRUST;
+    dialogueSteps.clear();
+    attitudes.clear();
+    answers.clear();
+    residentIds.clear();
+    transcripts.clear();
+    completedDialogues.clear();
     phase = Phase.DORMANT;
     chapterId = "chapter.last_signal";
     questId = specialistId = previousJob = pendingMessage = decisionId = "";

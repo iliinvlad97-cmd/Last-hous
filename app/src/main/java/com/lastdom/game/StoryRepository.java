@@ -8,7 +8,7 @@ final class StoryRepository {
   static final String P = "story1_";
 
   static void save(StoryState s, SharedPreferences.Editor e) {
-    e.putInt(P + "schema", 1)
+    e.putInt(P + "schema", 2)
         .putString(P + "phase", s.phase.name())
         .putString(P + "chapter", s.chapterId)
         .putString(P + "quest", s.questId)
@@ -25,6 +25,13 @@ final class StoryRepository {
     put(e, "returns", s.processedReturns);
     put(e, "read", s.readMessages);
     put(e, "messages", s.messages);
+    e.putInt(P + "voicesStage", s.voicesStage).putInt(P + "evaTrust", s.evaTrust);
+    put(e, "completedDialogues", s.completedDialogues);
+    saveMap(e, "steps", s.dialogueSteps);
+    saveMap(e, "attitudes", s.attitudes);
+    saveMap(e, "answers", s.answers);
+    saveMap(e, "residentIds", s.residentIds);
+    saveMap(e, "transcripts", s.transcripts);
     e.putInt(P + "attempts", s.attemptResults.size());
     int i = 0;
     for (Map.Entry<String, Boolean> a : s.attemptResults.entrySet()) {
@@ -73,11 +80,47 @@ final class StoryRepository {
     get(p, "messages", s.messages);
     s.messages.removeIf(id -> StoryConfig.event(id) == null);
     if (StoryConfig.event(s.pendingMessage) == null) s.pendingMessage = "";
+    s.voicesStage = Math.max(0, Math.min(6, p.getInt(P + "voicesStage", 0)));
+    s.evaTrust = Math.max(0, Math.min(100, p.getInt(P + "evaTrust", 50)));
+    get(p, "completedDialogues", s.completedDialogues);
+    loadStrings(p, "answers", s.answers);
+    loadStrings(p, "residentIds", s.residentIds);
+    loadStrings(p, "transcripts", s.transcripts);
+    loadInts(p, "steps", s.dialogueSteps);
+    loadInts(p, "attitudes", s.attitudes);
     int n = Math.max(0, Math.min(10000, p.getInt(P + "attempts", 0)));
     for (int i = 0; i < n; i++) {
       String id = p.getString(P + "attempt_" + i, "");
       if (!id.isEmpty()) s.attemptResults.putIfAbsent(id, p.getBoolean(P + "success_" + i, false));
     }
+  }
+
+  static void saveMap(SharedPreferences.Editor e, String key, Map<String, ?> values) {
+    e.putInt(P + key + "Count", values.size());
+    int i = 0;
+    for (Map.Entry<String, ?> a : values.entrySet()) {
+      e.putString(P + key + i + "Key", a.getKey());
+      e.putString(P + key + i + "Value", a.getValue().toString());
+      i++;
+    }
+  }
+
+  static void loadStrings(SharedPreferences p, String key, Map<String, String> values) {
+    int n = Math.max(0, Math.min(10000, p.getInt(P + key + "Count", 0)));
+    for (int i = 0; i < n; i++) {
+      String id = p.getString(P + key + i + "Key", "");
+      if (!id.isEmpty()) values.put(id, p.getString(P + key + i + "Value", ""));
+    }
+  }
+
+  static void loadInts(SharedPreferences p, String key, Map<String, Integer> values) {
+    Map<String, String> raw = new LinkedHashMap<>();
+    loadStrings(p, key, raw);
+    for (Map.Entry<String, String> a : raw.entrySet())
+      try {
+        values.put(a.getKey(), Math.max(0, Math.min(100, Integer.parseInt(a.getValue()))));
+      } catch (NumberFormatException ignored) {
+      }
   }
 
   private StoryRepository() {}

@@ -55,6 +55,7 @@ final class StoryController {
   }
 
   void advanceMinute() {
+    startVoices();
     if (state.phase == StoryState.Phase.DORMANT
         && game.day >= StoryConfig.START_DAY
         && generatorAvailable()
@@ -100,6 +101,153 @@ final class StoryController {
         game.addLog("Последний сигнал: часть координат объекта «Рассвет» расшифрована.");
       }
     }
+  }
+
+  boolean publicBranch() {
+    return state.decisionId.equals(StoryConfig.SHARE.id)
+        && state.flags.contains(StoryFlags.SHARE)
+        && !state.flags.contains(StoryFlags.SECRET);
+  }
+
+  void startVoices() {
+    boolean secret =
+        state.decisionId.equals(StoryConfig.SECRET.id)
+            && state.flags.contains(StoryFlags.SECRET)
+            && !state.flags.contains(StoryFlags.SHARE);
+    if (state.voicesStage != 0
+        || state.phase != StoryState.Phase.CHAIN_COMPLETE
+        || (!publicBranch() && !secret)) return;
+    state.voicesStage = 1;
+    state.questId = StoryConfig.VOICES.id;
+    for (Resident r : game.people)
+      for (String name : new String[] {"Иван", "Мария", "Сергей"})
+        if (name.equals(r.name)) {
+          state.residentIds.put(name, r.id);
+          state.attitudes.put(r.id, StoryDialogue.INITIAL_TRUST);
+        }
+    message(StoryDialogue.INTRO.event);
+    game.addLog("Сюжет: «Голоса в эфире» — новое сообщение Евы, радистки станции 17.");
+  }
+
+  int step(StoryDialogue d) {
+    return state.dialogueSteps.getOrDefault(d.event.id, 0);
+  }
+
+  String dialogueText(StoryDialogue d, int index) {
+    String key = d.event.id + "." + index;
+    if (state.transcripts.containsKey(key)) return state.transcripts.get(key);
+    StoryDialogue.Line line = d.lines[index];
+    Resident r =
+        game.expeditionController.resident(state.residentIds.getOrDefault(line.residentName, ""));
+    boolean available =
+        line.residentName.isEmpty()
+            || (r != null && game.roomUpgradeController.unavailableReason(r).isEmpty());
+    if (d == StoryDialogue.EVA && index == 1) {
+      String answer = state.answers.get(d.event.id + ".0");
+      String reaction =
+          line.responses.length == 0 && d.lines[0].responses[0].equals(answer)
+              ? "Вы правы: нужны доказательства, а не обещания. "
+              : "Осторожность не означает обман. Я не раскрою неподтверждённые сведения. ";
+      return line.speaker + " · " + line.role + "\n" + reaction + line.text;
+    }
+    return available
+        ? line.speaker + " · " + line.role + "\n" + line.text
+        : "Журнал убежища · нейтральная заметка\n"
+            + line.residentName
+            + " сейчас недоступен для разговора. Его мнение можно обсудить позднее; проверка"
+            + " источника остаётся важной.";
+  }
+
+  String continueDialogue(String id, int expectedStep, int response) {
+    StoryDialogue d = StoryDialogue.find(id);
+    if (d == null
+        || !state.messages.contains(id)
+        || state.completedDialogues.contains(id)
+        || step(d) != expectedStep
+        || expectedStep < 0
+        || expectedStep >= d.lines.length) return "Эта реплика уже завершена или недоступна";
+    StoryDialogue.Line line = d.lines[expectedStep];
+    if (line.responses.length > 0 && (response < 0 || response >= line.responses.length))
+      return "Выберите ответ";
+    String key = id + "." + expectedStep;
+    state.transcripts.put(key, dialogueText(d, expectedStep));
+    if (line.responses.length > 0) {
+      state.answers.put(key, line.responses[response]);
+      int delta = response == 0 ? StoryDialogue.EVIDENCE_TRUST : StoryDialogue.GUARDED_TRUST;
+      state.evaTrust = Math.max(0, Math.min(100, state.evaTrust + delta));
+      game.addLog(
+          "Сюжет: ответ Еве «"
+              + line.responses[response]
+              + "». Доверие "
+              + (delta > 0 ? "+" : "")
+              + delta
+              + ".");
+    }
+    state.dialogueSteps.put(id, expectedStep + 1);
+    if (expectedStep + 1 == d.lines.length) {
+      state.completedDialogues.add(id);
+      if (d == StoryDialogue.INTRO) state.objectives.add("voices.message");
+      else if (d == StoryDialogue.RESIDENTS) state.objectives.add("voices.discussion");
+      else if (d == StoryDialogue.EVA) state.objectives.add("voices.eva");
+      else if (d == StoryDialogue.PUBLIC || d == StoryDialogue.SECRET)
+        state.objectives.add("voices.consequence");
+      else if (d == StoryDialogue.HOOK) state.objectives.add("voices.hook");
+      state.readMessages.add(id);
+      if (state.pendingMessage.equals(id)) state.pendingMessage = "";
+      game.addLog("Сюжет: разговор «" + d.event.source + "» завершён.");
+      StoryDialogue next = null;
+      if (d == StoryDialogue.INTRO) {
+        state.voicesStage = 2;
+        next = StoryDialogue.RESIDENTS;
+      } else if (d == StoryDialogue.RESIDENTS) {
+        state.voicesStage = 3;
+        next = StoryDialogue.EVA;
+      } else if (d == StoryDialogue.EVA) {
+        state.voicesStage = 4;
+        next = publicBranch() ? StoryDialogue.PUBLIC : StoryDialogue.SECRET;
+      } else if (d == StoryDialogue.PUBLIC || d == StoryDialogue.SECRET) {
+        boolean shared = d == StoryDialogue.PUBLIC;
+        state.flags.add(shared ? StoryFlags.PUBLIC_SIGNAL : StoryFlags.SECRET_SIGNAL);
+        state.evaTrust =
+            Math.max(
+                0,
+                Math.min(
+                    100,
+                    state.evaTrust
+                        + (shared ? -StoryDialogue.BRANCH_TRUST : StoryDialogue.BRANCH_TRUST)));
+        String sergey = state.residentIds.get("Сергей");
+        if (sergey != null)
+          state.attitudes.put(
+              sergey,
+              Math.max(
+                  0,
+                  Math.min(
+                      100,
+                      state.attitudes.getOrDefault(sergey, 50)
+                          + (shared ? -StoryDialogue.BRANCH_TRUST : StoryDialogue.BRANCH_TRUST))));
+        if (!shared) state.items.add("encrypted_station17_fragment");
+        game.addLog(
+            "Сюжет: «"
+                + d.event.source
+                + "». Доверие Евы "
+                + (shared ? "−5" : "+5")
+                + "; отношение Сергея "
+                + (shared ? "−5" : "+5")
+                + " к прежнему решению.");
+        state.voicesStage = 5;
+        next = StoryDialogue.HOOK;
+      } else if (d == StoryDialogue.HOOK) {
+        state.voicesStage = 6;
+        game.addLog(
+            "Сюжет: «Голоса в эфире» завершено. Зацепка — архив станции 17; продолжение пока"
+                + " недоступно.");
+      }
+      if (next != null) message(next.event);
+      else prompt = false;
+    }
+    game.save();
+    game.invalidate();
+    return "";
   }
 
   void research(Expedition e, boolean early) {
@@ -170,6 +318,7 @@ final class StoryController {
   }
 
   void read(String id) {
+    if (StoryDialogue.find(id) != null) return;
     if (StoryConfig.event(id) == null || !state.messages.contains(id)) return;
     state.readMessages.add(id);
     if (id.equals(StoryConfig.SIGNAL.id)) state.objectives.add("signal");

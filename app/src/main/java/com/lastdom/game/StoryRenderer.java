@@ -28,15 +28,17 @@ final class StoryRenderer {
     view.p.setTextSize(view.sy(12));
     for (int i = 0; i < p.rows.size(); i++) {
       List<String> out = new ArrayList<>();
-      String line = "";
-      for (String word : p.rows.get(i).text.split(" ")) {
-        String next = line.isEmpty() ? word : line + " " + word;
-        if (!line.isEmpty() && view.p.measureText(next) > view.sy(332)) {
-          out.add(line);
-          line = word;
-        } else line = next;
+      for (String paragraph : p.rows.get(i).text.split("\n", -1)) {
+        String line = "";
+        for (String word : paragraph.split(" ")) {
+          String next = line.isEmpty() ? word : line + " " + word;
+          if (!line.isEmpty() && view.p.measureText(next) > view.sy(332)) {
+            out.add(line);
+            line = word;
+          } else line = next;
+        }
+        if (!line.isEmpty()) out.add(line);
       }
-      if (!line.isEmpty()) out.add(line);
       lines.add(out);
       tops[i] = total;
       heights[i] = Math.max(p.rows.get(i).action ? 56 : 30, out.size() * 17 + 15);
@@ -69,7 +71,7 @@ final class StoryRenderer {
     view.box(c, 0, 0, 420, view.H / view.scale - 80, Color.argb(220, 5, 10, 15), 0);
     view.box(c, 18, l.top, 402, l.bottom, view.panel, 16);
     view.bold(c, p.title(), 32, l.top + 32, 14, view.accent);
-    view.txt(c, "STORY 1.0 · локальная кампания", 32, l.top + 50, 10, view.muted);
+    view.txt(c, "STORY 1.1 · локальная кампания", 32, l.top + 50, 10, view.muted);
     c.save();
     c.clipRect(view.sy(28), view.sy(l.contentTop), view.sy(392), view.sy(l.contentBottom));
     for (int i = 0; i < lines.size(); i++) {
@@ -110,7 +112,15 @@ final class StoryRenderer {
     if (!noticeVisible()) return;
     float y = view.H / view.scale - 144;
     view.box(c, 18, y, 402, y + 56, view.panel2, 10);
-    view.bold(c, "ПОСЛЕДНИЙ СИГНАЛ · сообщение", 30, y + 22, 12, view.accent);
+    view.bold(
+        c,
+        view.game.story.voicesStage > 0
+            ? "ГОЛОСА В ЭФИРЕ · сообщение"
+            : "ПОСЛЕДНИЙ СИГНАЛ · сообщение",
+        30,
+        y + 22,
+        12,
+        view.accent);
     view.txt(c, "Нажмите, чтобы открыть. Также: Журнал → Сюжет", 30, y + 43, 10, view.text);
   }
 }

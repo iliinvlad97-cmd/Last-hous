@@ -7,6 +7,7 @@ final class StoryFlags {
       COORDINATES = "last_signal.coordinates",
       SHARE = "last_signal.share",
       SECRET = "last_signal.secret";
+  static final String PUBLIC_SIGNAL = "PUBLIC_SIGNAL", SECRET_SIGNAL = "SECRET_SIGNAL";
 
   enum Ending {
     NONE,

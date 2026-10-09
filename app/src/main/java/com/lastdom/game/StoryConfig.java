@@ -23,6 +23,16 @@ final class StoryConfig {
           new StoryObjective("carrier", "Доставить носитель со старой радиостанции"),
           new StoryObjective("decode", "Расшифровать координаты в мастерской"),
           new StoryObjective("choice", "Решить судьбу координат"));
+  static final StoryQuest VOICES =
+      new StoryQuest(
+          "quest.voices_on_air",
+          "chapter.last_signal",
+          "Голоса в эфире",
+          new StoryObjective("voices.message", "Получить новое сообщение"),
+          new StoryObjective("voices.discussion", "Обсудить сигнал с жителями"),
+          new StoryObjective("voices.eva", "Поговорить с Евой"),
+          new StoryObjective("voices.consequence", "Узнать последствия первого решения"),
+          new StoryObjective("voices.hook", "Получить зацепку следующего задания"));
   static final StoryEvent SIGNAL =
       new StoryEvent(
           "message.station17",
@@ -50,7 +60,8 @@ final class StoryConfig {
 
   static StoryEvent event(String id) {
     for (StoryEvent e : new StoryEvent[] {SIGNAL, FOUND, DECODED}) if (e.id.equals(id)) return e;
-    return null;
+    StoryDialogue d = StoryDialogue.find(id);
+    return d == null ? null : d.event;
   }
 
   static MapLocation location() {
