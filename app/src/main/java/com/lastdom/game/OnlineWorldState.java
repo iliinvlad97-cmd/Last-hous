@@ -52,6 +52,8 @@ final class OnlineWorldState {
   final double[] deliverySeconds;
   final float[] deliveryPositions;
   float confirmationGlow;
+  String notice = "";
+  double noticeSeconds;
   boolean resultSuccess;
 
   String shelterId = "", zoneId = "", squadId = "";

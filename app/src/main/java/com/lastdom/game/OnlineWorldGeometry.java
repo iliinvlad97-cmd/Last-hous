@@ -85,7 +85,7 @@ final class OnlineWorldGeometry {
     panelTop = Math.max(12, Math.max(height - 610, Math.min(108, height - 360)));
     panelBottom = height - 86;
     contentTop = panelTop + 89;
-    contentBottom = panelBottom - 132;
+    contentBottom = panelBottom - 148;
   }
 
   float x(float normalized) {
@@ -113,7 +113,7 @@ final class OnlineWorldGeometry {
   }
 
   boolean secondary(float x, float y) {
-    return x >= 34 && x <= 386 && y >= panelBottom - 114 && y <= panelBottom - 76;
+    return x >= 34 && x <= 386 && y >= panelBottom - 122 && y <= panelBottom - 66;
   }
 
   boolean secondaryLeft(float x, float y, boolean trade) {
@@ -125,7 +125,7 @@ final class OnlineWorldGeometry {
   }
 
   boolean closeButton(float x, float y) {
-    return x >= 34 && x <= 386 && y >= panelBottom - 66 && y <= panelBottom - 24;
+    return x >= 34 && x <= 386 && y >= panelBottom - 60 && y <= panelBottom - 4;
   }
 
   int visibleLines() {

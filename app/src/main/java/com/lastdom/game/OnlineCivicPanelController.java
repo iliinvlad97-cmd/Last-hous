@@ -50,6 +50,7 @@ final class OnlineCivicPanelController {
   }
 
   final OnlineWorldController world;
+  final OnlinePanelLayout layout = new OnlinePanelLayout();
   final List<String> fighters = new ArrayList<>(), allies = new ArrayList<>();
   final Map<String, Motion> routes = new LinkedHashMap<>();
   private final List<Row> rows = new ArrayList<>();
@@ -370,6 +371,9 @@ final class OnlineCivicPanelController {
       default:
         break;
     }
+    String blocked = primaryReason();
+    if (!blocked.isEmpty()) rows.add(0, new Row("ДЕЙСТВИЕ НЕДОСТУПНО", blocked, Action.INFO, ""));
+    layout.reset(rows.size());
     return rows;
   }
 
@@ -411,6 +415,11 @@ final class OnlineCivicPanelController {
     return "";
   }
 
+  int contentHeight() {
+    rows();
+    return layout.total();
+  }
+
   String primary() {
     switch (world.state.panel) {
       case ALLIANCE:
@@ -431,6 +440,37 @@ final class OnlineCivicPanelController {
     }
   }
 
+  String primaryReason() {
+    if (!world.demoActionsAvailable()) return "Демо-сеть недоступна";
+    OnlineWorldGameplay.Data d = world.state.gameplay;
+    switch (world.state.panel) {
+      case ALLIANCE_NAME:
+        return name.trim().length() < 2 ? "Название должно содержать минимум 2 символа" : "";
+      case ALLIANCE:
+        return d.civic.alliance == null && name.trim().length() < 2 ? "Введите название союза" : "";
+      case EVENTS:
+        if (d.civic.events.size() >= OnlineCityEvent.MAX_EVENTS) return "Демо-история заполнена";
+        long wait = OnlineCityEvent.INTERVAL - d.civic.minute + d.civic.lastDebug;
+        return wait > 0 ? "Новое демо-событие через " + wait + " игровых минут" : "";
+      case CITY_EVENT:
+        OnlineCityEvent e = d.civic.event(eventId);
+        if (e == null) return "Событие не найдено";
+        if (!e.operationId.isEmpty()) return "";
+        if (e.state != OnlineCityEvent.State.AVAILABLE) return "Срок события истёк";
+        if (d.civic.alliance == null) return "Создайте союз во вкладке СОЮЗ";
+        boolean accepted = false;
+        for (OnlineAllianceMember m : d.civic.alliance.members)
+          if (!m.shelterId.equals(OnlineAllianceMember.PLAYER)
+              && m.invitation == OnlineAllianceMember.Invitation.ACCEPTED) accepted = true;
+        return accepted ? "" : "Дождитесь принятия приглашения союзником";
+      case OPERATION_PREP:
+        return OnlineActionRules.operation(
+            d, world.state.snapshot, requestId, eventId, fighters, allies);
+      default:
+        return "";
+    }
+  }
+
   void change() {
     world.panelRevision++;
     revision = -1;
@@ -442,6 +482,11 @@ final class OnlineCivicPanelController {
   }
 
   private void submit() {
+    String blocked = primaryReason();
+    if (!blocked.isEmpty()) {
+      result(new OnlineWorldGameplay.Result(false, blocked));
+      return;
+    }
     OnlineWorldGameplay.Data d = world.state.gameplay;
     switch (world.state.panel) {
       case ALLIANCE:
@@ -507,7 +552,7 @@ final class OnlineCivicPanelController {
             Math.max(
                 0,
                 Math.min(
-                    Math.max(0, rows().size() * ROW - (int) (bottom - 112)),
+                    Math.max(0, contentHeight() - (int) (bottom - 112)),
                     scroll + (int) (lastY - y)));
         lastY = y;
       }
@@ -541,8 +586,8 @@ final class OnlineCivicPanelController {
     }
     if (x < 34 || x > 386 || y < 112 || y > bottom)
       return OnlineWorldController.TouchResult.CONSUMED;
-    int index = (int) ((y - 112 + scroll) / ROW);
     List<Row> list = rows();
+    int index = layout.at(y - 112 + scroll);
     if (index < 0 || index >= list.size()) return OnlineWorldController.TouchResult.CONSUMED;
     Row row = list.get(index);
     switch (row.action) {

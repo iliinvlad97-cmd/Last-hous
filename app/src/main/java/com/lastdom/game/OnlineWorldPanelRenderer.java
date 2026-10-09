@@ -8,14 +8,17 @@ import java.util.*;
  */
 final class OnlineWorldPanelRenderer {
   private final GameView view;
+  private final OnlineUiStyle ui;
   private final List<String> lines = new ArrayList<>();
   private final List<Integer> colors = new ArrayList<>();
   private int revision = -1;
   private float scale;
   private String title = "", subtitle = "";
+  private final List<String> header = new ArrayList<>();
 
-  OnlineWorldPanelRenderer(GameView view) {
+  OnlineWorldPanelRenderer(GameView view, OnlineUiStyle ui) {
     this.view = view;
+    this.ui = ui;
   }
 
   void draw(Canvas c, OnlineWorldGeometry g) {
@@ -28,10 +31,9 @@ final class OnlineWorldPanelRenderer {
     }
     controller.panelLineCount = lines.size();
     state.panelScroll = Math.min(state.panelScroll, Math.max(0, lines.size() - g.visibleLines()));
-    view.box(c, 0, 0, 420, g.height - 80, opacity(Color.argb(180, 5, 11, 17)), 0);
-    view.box(c, 18, g.panelTop, 402, g.panelBottom, opacity(view.panel), 16);
+    ui.surface(c, g.panelTop, g.panelBottom);
     if (state.confirmationGlow > .01f)
-      view.box(
+      ui.box(
           c,
           34,
           g.panelTop + 72,
@@ -39,16 +41,22 @@ final class OnlineWorldPanelRenderer {
           g.panelTop + 75,
           opacity(OnlineWorldRenderer.alpha(view.good, (int) (state.confirmationGlow * 210))),
           2);
-    view.bold(
-        c, title, 34, g.panelTop + 34, 16, opacity(state.confirmingPvp ? view.danger : view.text));
+    for (int i = 0; i < header.size(); i++)
+      ui.bold(
+          c,
+          header.get(i),
+          34,
+          g.panelTop + 24 + i * 17,
+          OnlineUiStyle.TITLE,
+          opacity(state.confirmingPvp ? view.danger : view.text));
     if (!state.confirmingPvp
         && controller.demoActionsAvailable()
         && (state.panel == OnlineWorldState.Panel.INVENTORY
             || state.panel == OnlineWorldState.Panel.OBJECT
                 && state.zone() != null
                 && state.zone().type != OnlineZone.Type.SAFE)) {
-      view.box(c, 280, g.panelTop + 12, 350, g.panelTop + 52, opacity(view.accent), 8);
-      view.bold(
+      ui.box(c, 280, g.panelTop + 8, 350, g.panelTop + 64, opacity(view.accent), 8);
+      ui.bold(
           c,
           state.panel == OnlineWorldState.Panel.INVENTORY
               ? "ОТРЯД"
@@ -56,25 +64,24 @@ final class OnlineWorldPanelRenderer {
                   ? "БОЙ"
                   : state.coop(state.zoneId) != null ? "ОТЧЁТ" : "PvE",
           290,
-          g.panelTop + 37,
+          g.panelTop + 40,
           11,
           opacity(view.bg));
     }
-    view.bold(c, "×", 372, g.panelTop + 31, 22, opacity(view.muted));
-    view.txt(c, subtitle, 34, g.panelTop + 63, 12, opacity(view.accent));
-    c.save();
-    c.clipRect(view.sy(32), view.sy(g.contentTop - 12), view.sy(390), view.sy(g.contentBottom));
+    ui.bold(c, "×", 372, g.panelTop + 31, 22, opacity(view.muted));
+    ui.txt(c, subtitle, 34, g.panelTop + 75, 12, opacity(view.accent));
+    ui.clip(c, 32, g.contentTop - 12, 390, g.contentBottom);
     for (int i = 0; i < g.visibleLines() && i + state.panelScroll < lines.size(); i++)
-      view.txt(
+      ui.txt(
           c,
           lines.get(i + state.panelScroll),
           34,
           g.contentTop + i * 19,
           12,
           opacity(colors.get(i + state.panelScroll)));
-    c.restore();
+    ui.restore(c);
     if (lines.size() > g.visibleLines()) {
-      view.txt(
+      ui.txt(
           c,
           state.panelScroll == 0 ? "Прокрутите для подробностей ↓" : "↑ Подробности ↓",
           34,
@@ -112,17 +119,28 @@ final class OnlineWorldPanelRenderer {
           available ? view.accent : view.panel2);
       if (trade) button(c, g, 310, 386, "ДРУГОЕ", view.panel2);
     } else if (state.panel == OnlineWorldState.Panel.INVENTORY) {
-      button(c, g, 34, 386, "ИСТОРИЯ ОПЕРАЦИЙ", view.accent);
+      button(c, g, 34, 204, "ОТРЯД", view.accent);
+      button(c, g, 216, 386, "ИСТОРИЯ", view.panel2);
     } else if (state.panel == OnlineWorldState.Panel.OBJECT && controller.pvpActionAvailable()) {
       String label =
           state.confirmingPvp
               ? "ПОДТВЕРДИТЬ (ДЕМО)"
               : state.pvpEnabled ? "ВЫКЛЮЧИТЬ PvP (ДЕМО)" : "ВКЛЮЧИТЬ PvP (ДЕМО)";
-      button(c, g, 34, 386, label, view.accent);
+      if (!state.confirmingPvp) button(c, g, 34, 204, "БОЙ", view.accent);
+      button(
+          c,
+          g,
+          state.confirmingPvp ? 34 : 216,
+          386,
+          state.confirmingPvp ? label : state.pvpEnabled ? "PvP ВКЛ." : "PvP ВЫКЛ.",
+          view.accent);
     }
-    view.box(c, 34, g.panelBottom - 66, 386, g.panelBottom - 24, opacity(view.panel2), 10);
-    view.bold(
+    ui.button(
         c,
+        34,
+        g.panelBottom - 60,
+        386,
+        g.panelBottom - 4,
         state.confirmingPvp
             ? "ОТКАЗАТЬСЯ"
             : state.panel == OnlineWorldState.Panel.TRADE
@@ -130,10 +148,8 @@ final class OnlineWorldPanelRenderer {
                     || state.panel == OnlineWorldState.Panel.HISTORY
                 ? "НАЗАД"
                 : "ЗАКРЫТЬ",
-        155,
-        g.panelBottom - 39,
-        12,
-        opacity(view.text));
+        view.panel2,
+        true);
   }
 
   private void prepare(OnlineWorldState state) {
@@ -328,6 +344,8 @@ final class OnlineWorldPanelRenderer {
       add("Он не состоит из жителей вашего убежища и не переносит настоящую добычу.");
       add("Движение использует время кадра. Скорость игровой симуляции не влияет на этот патруль.");
     }
+    header.clear();
+    ui.wrap(header, title, OnlineUiStyle.TITLE, 234, true);
   }
 
   private void add(String paragraph) {
@@ -338,12 +356,9 @@ final class OnlineWorldPanelRenderer {
 
   private void button(
       Canvas c, OnlineWorldGeometry g, float left, float right, String label, int color) {
-    view.box(c, left, g.panelBottom - 114, right, g.panelBottom - 76, opacity(color), 10);
-    view.p.setTextSize(view.sy(12));
-    view.p.setTypeface(Typeface.create("sans", Typeface.BOLD));
-    float x = (left + right - view.p.measureText(label) / view.scale) / 2;
-    view.bold(
-        c, label, x, g.panelBottom - 89, 12, opacity(color == view.panel2 ? view.text : view.bg));
+    boolean enabled = view.onlineWorld.demoActionsAvailable();
+    if (label.equals("НЕДОСТУПНО")) enabled = false;
+    ui.button(c, left, g.panelBottom - 122, right, g.panelBottom - 66, label, color, enabled);
   }
 
   private void fact(String paragraph) {
@@ -352,7 +367,7 @@ final class OnlineWorldPanelRenderer {
 
   private void fact(String paragraph, int color) {
     view.p.setTextSize(view.sy(12));
-    view.p.setTypeface(Typeface.create("sans", Typeface.NORMAL));
+    view.p.setTypeface(OnlineUiStyle.REGULAR);
     String line = "";
     for (String word : paragraph.split(" ")) {
       String candidate = line.isEmpty() ? word : line + " " + word;
@@ -369,7 +384,6 @@ final class OnlineWorldPanelRenderer {
   }
 
   private int opacity(int color) {
-    int alpha = Math.round((color >>> 24) * view.onlineWorld.state.cardOpacity);
-    return OnlineWorldRenderer.alpha(color, alpha);
+    return color;
   }
 }

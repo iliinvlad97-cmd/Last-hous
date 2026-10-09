@@ -28,8 +28,9 @@ final class OnlineCombatPanelController {
     }
   }
 
-  static final int ROW_HEIGHT = 62;
+  static final int ROW_HEIGHT = OnlineUiStyle.ROW_HEIGHT;
   final OnlineWorldController world;
+  final OnlinePanelLayout layout = new OnlinePanelLayout();
   final List<String> selected = new ArrayList<>();
   private final List<Row> rows = new ArrayList<>();
   OnlineCombatRules.Tactic tactic = OnlineCombatRules.Tactic.BALANCED;
@@ -116,7 +117,7 @@ final class OnlineCombatPanelController {
 
   String subtitle() {
     OnlineZone zone = world.state.zone();
-    return zone == null ? "Локальная радиосеть · ONLINE 0.3" : zone.name;
+    return zone == null ? "Локальная радиосеть · ONLINE 0.5" : zone.name;
   }
 
   private void row(String title, String detail) {
@@ -133,7 +134,21 @@ final class OnlineCombatPanelController {
       row(state.resultSuccess ? "Действие выполнено" : "Действие недоступно", state.result);
     switch (state.panel) {
       case ROSTER:
-        row("ВОССТАНОВЛЕНИЕ: +35 здоровья, +50 сил", "Цена: 1 демо-медикамент + 1 демо-вода");
+        row(
+            "ВОССТАНОВЛЕНИЕ: +"
+                + OnlineCombatRules.RECOVER_HEALTH
+                + " здоровья, +"
+                + OnlineCombatRules.RECOVER_STAMINA
+                + " сил",
+            "Медикамент для здоровья · вода для выносливости");
+        OnlineCombatSquad.Fighter recovery = data.fighter(recoveryId);
+        if (recovery != null)
+          row(
+              "Цена для " + recovery.name,
+              "Медикаменты: "
+                  + OnlineActionRules.medicine(recovery)
+                  + " · вода: "
+                  + OnlineActionRules.water(recovery));
         row(
             "Демо-запасы",
             "Медикаменты: "
@@ -300,7 +315,11 @@ final class OnlineCombatPanelController {
       default:
         break;
     }
-    contentHeight = rows.size() * ROW_HEIGHT;
+    String blocked = primaryReason();
+    if (!blocked.isEmpty())
+      rows.add(0, new Row("Действие недоступно", blocked, Action.INFO, "", 0));
+    layout.reset(rows.size());
+    contentHeight = layout.total();
     return rows;
   }
 
@@ -344,6 +363,23 @@ final class OnlineCombatPanelController {
       fighters.add(fighter);
     }
     return new OnlineCombatSquad(fighters);
+  }
+
+  String primaryReason() {
+    if (!world.demoActionsAvailable()) return "Демо-сеть недоступна";
+    OnlineWorldState s = world.state;
+    if (s.panel == OnlineWorldState.Panel.ROSTER)
+      return OnlineActionRules.recovery(s.gameplay, recoveryId);
+    if (s.panel == OnlineWorldState.Panel.PVP_PREP || s.panel == OnlineWorldState.Panel.COOP_PREP)
+      return OnlineActionRules.mission(
+          s.gameplay,
+          s.snapshot,
+          requestId,
+          s.zoneId,
+          selected,
+          s.shelters.isEmpty() ? "" : s.shelters.get(allyIndex % s.shelters.size()).id,
+          s.panel == OnlineWorldState.Panel.PVP_PREP);
+    return "";
   }
 
   private void changed() {
@@ -406,6 +442,10 @@ final class OnlineCombatPanelController {
       switch (world.state.panel) {
         case PVP_PREP:
         case COOP_PREP:
+          if (!primaryReason().isEmpty()) {
+            result(new OnlineWorldGameplay.Result(false, primaryReason()));
+            break;
+          }
           if (selected.isEmpty()) {
             result(new OnlineWorldGameplay.Result(false, "Выберите от 1 до 3 бойцов"));
             break;
@@ -450,8 +490,8 @@ final class OnlineCombatPanelController {
       return OnlineWorldController.TouchResult.CONSUMED;
     }
     if (y >= g.contentTop - 12 && y <= g.contentBottom) {
-      int index = (int) ((y - (g.contentTop - 12) + scroll) / ROW_HEIGHT);
       List<Row> items = rows();
+      int index = layout.at(y - (g.contentTop - 12) + scroll);
       if (index >= 0 && index < items.size()) {
         Row row = items.get(index);
         switch (row.action) {

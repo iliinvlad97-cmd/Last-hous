@@ -50,7 +50,7 @@ final class OnlineWorldController {
           i * 2);
     }
     state = replacement;
-    civicPanel.sync();
+    if (visible) civicPanel.sync();
     previousNanos = Long.MIN_VALUE;
     changed();
   }
@@ -65,7 +65,7 @@ final class OnlineWorldController {
     previousNanos = Long.MIN_VALUE;
     syncGameplay();
     combatPanel.resumed();
-    civicPanel.sync();
+    if (visible) civicPanel.sync();
     for (int i = 0; i < state.gameplay.operations.size(); i++)
       state.deliverySeconds[i] = state.gameplay.operations.get(i).elapsedSeconds;
   }
@@ -82,6 +82,8 @@ final class OnlineWorldController {
   }
 
   void advanceMinute() {
+    OnlineWorldGameplay.Data before = state.gameplay;
+    int previousTrips = finishedTrips(), previousAllies = acceptedAllies();
     int completed = 0;
     for (OnlineCoopOperation op : state.gameplay.civic.operations)
       if (op.state == OnlineCoopOperation.State.COMPLETED) completed++;
@@ -94,9 +96,37 @@ final class OnlineWorldController {
         state.result = "Операция завершена. Отчёт доступен в событиях";
         state.resultSuccess = true;
         state.confirmationGlow = 1;
+        notice("ОПЕРАЦИЯ ЗАВЕРШЕНА");
       }
+      if (finishedTrips() > previousTrips) {
+        boolean reward = false;
+        for (OnlineCoopExpedition trip : state.gameplay.combat.expeditions)
+          if (trip.rewardApplied
+              && !before.combat.expedition(trip.id).rewardApplied
+              && trip.success) reward = true;
+        notice(reward ? "НАГРАДА ПОЛУЧЕНА" : "ОПЕРАЦИЯ ЗАВЕРШЕНА");
+      } else if (acceptedAllies() > previousAllies) notice("СОЮЗНИК ПРИСОЕДИНИЛСЯ");
       panelRevision++;
     }
+  }
+
+  private int finishedTrips() {
+    int count = 0;
+    for (OnlineCoopExpedition e : state.gameplay.combat.expeditions) if (e.rewardApplied) count++;
+    return count;
+  }
+
+  private int acceptedAllies() {
+    int count = 0;
+    if (state.gameplay.civic.alliance != null)
+      for (OnlineAllianceMember m : state.gameplay.civic.alliance.members)
+        if (m.invitation == OnlineAllianceMember.Invitation.ACCEPTED) count++;
+    return count;
+  }
+
+  private void notice(String text) {
+    state.notice = "ДЕМО · " + text;
+    state.noticeSeconds = 4;
   }
 
   private void syncGameplay() {
@@ -111,7 +141,7 @@ final class OnlineWorldController {
           i * 2);
     }
     state.pvpEnabled = !state.gameplay.pvpZoneId.isEmpty();
-    civicPanel.sync();
+    if (visible) civicPanel.sync();
   }
 
   void acceptResult(OnlineWorldGameplay.Result result) {
@@ -119,6 +149,10 @@ final class OnlineWorldController {
     state.result = result.message;
     state.resultSuccess = result.success;
     if (result.success) state.confirmationGlow = 1;
+    notice(
+        result.success
+            ? result.message.startsWith("Сделка") ? "СДЕЛКА ЗАВЕРШЕНА" : "ДЕЙСТВИЕ ВЫПОЛНЕНО"
+            : "ДЕЙСТВИЕ НЕДОСТУПНО");
     panelRevision++;
   }
 
@@ -217,10 +251,7 @@ final class OnlineWorldController {
         demoActionsAvailable()
             ? repository.execute(offerId, kind)
             : new OnlineWorldGameplay.Result(false, "Демо-действия недоступны");
-    syncGameplay();
-    state.result = result.message;
-    state.resultSuccess = result.success;
-    if (result.success) state.confirmationGlow = 1;
+    acceptResult(result);
     changed();
     return result;
   }
@@ -272,6 +303,8 @@ final class OnlineWorldController {
 
   void leave() {
     visible = false;
+    civicPanel.routes.clear();
+    state.cardOpacity = state.selectionStrength = 0;
     previousNanos = Long.MIN_VALUE;
     closeCard();
   }
@@ -294,6 +327,7 @@ final class OnlineWorldController {
     for (int i = 0; i < state.squads.size(); i++)
       state.squads.get(i).position(state.animationSeconds, state.squadPositions, i * 2);
     state.confirmationGlow *= (float) Math.exp(-seconds / .7);
+    state.noticeSeconds = Math.max(0, state.noticeSeconds - seconds);
     for (int i = 0; i < state.gameplay.operations.size(); i++) {
       OnlineWorldGameplay.Operation operation = state.gameplay.operations.get(i);
       if (!operation.active()) continue;
@@ -315,7 +349,6 @@ final class OnlineWorldController {
     civicPanel.confirming = false;
     state.panel = OnlineWorldState.Panel.OBJECT;
     state.offerId = state.deliveryId = state.result = "";
-    state.cardOpacity = state.selectionStrength = 0;
     changed();
   }
 
@@ -380,8 +413,8 @@ final class OnlineWorldController {
     if (card
         && x >= 280
         && x <= 350
-        && y >= g.panelTop + 12
-        && y <= g.panelTop + 52
+        && y >= g.panelTop + 8
+        && y <= g.panelTop + 64
         && !state.confirmingPvp
         && demoActionsAvailable()) {
       if (state.panel == OnlineWorldState.Panel.INVENTORY)
@@ -435,11 +468,14 @@ final class OnlineWorldController {
           if (offer != null) execute(offer.id, offer.kind);
         }
       } else if (g.secondary(x, y) && state.panel == OnlineWorldState.Panel.INVENTORY) {
-        openPanel(OnlineWorldState.Panel.HISTORY);
+        if (g.secondaryLeft(x, y, false)) combatPanel.open(OnlineWorldState.Panel.ROSTER);
+        else openPanel(OnlineWorldState.Panel.HISTORY);
       } else if (g.secondary(x, y)
           && state.panel == OnlineWorldState.Panel.OBJECT
           && pvpActionAvailable()) {
-        if (state.confirmingPvp) {
+        if (!state.confirmingPvp && g.secondaryLeft(x, y, false)) {
+          combatPanel.open(OnlineWorldState.Panel.PVP_PREP);
+        } else if (state.confirmingPvp) {
           preparePvp(true);
           state.confirmingPvp = false;
         } else if (state.pvpEnabled) {

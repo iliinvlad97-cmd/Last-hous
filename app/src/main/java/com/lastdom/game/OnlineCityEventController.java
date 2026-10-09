@@ -86,6 +86,8 @@ final class OnlineCityEventController {
         || c.minute >= event.expiresMinute)
       return result(d, false, "Событие уже занято, завершено или истекло");
     if (c.alliance == null) return result(d, false, "Сначала создайте союз");
+    String preflight = OnlineActionRules.operation(d, world, id, eventId, fighterIds, allies);
+    if (!preflight.isEmpty()) return result(d, false, preflight);
     try {
       OnlineCombatSquad allySquad = allies(world, allies);
       for (String ally : allies) {

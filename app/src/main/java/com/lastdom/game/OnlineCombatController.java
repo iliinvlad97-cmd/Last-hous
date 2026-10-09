@@ -68,6 +68,8 @@ final class OnlineCombatController {
       return fail(data, "Выберите PvP-зону и тактику");
     for (OnlineBattleRepository.Battle battle : data.combat.battles)
       if (battle.active()) return fail(data, "Сначала завершите текущий демо-бой");
+    String preflight = OnlineActionRules.mission(data, null, id, zone, ids, "", true);
+    if (!preflight.isEmpty()) return fail(data, preflight);
     OnlineCombatSquad squad;
     try {
       squad = select(data.combat, ids);
@@ -105,6 +107,8 @@ final class OnlineCombatController {
     for (OnlineShelter candidate : world.shelters)
       if (candidate.id.equals(allyId)) shelter = candidate;
     if (shelter == null) return fail(data, "Союзник не найден");
+    String preflight = OnlineActionRules.mission(data, world, id, zone, ids, allyId, false);
+    if (!preflight.isEmpty()) return fail(data, preflight);
     OnlineCombatSquad squad;
     try {
       squad = select(data.combat, ids);
@@ -125,19 +129,14 @@ final class OnlineCombatController {
   }
 
   Change recover(OnlineWorldGameplay.Data data, String id) {
+    String reason = OnlineActionRules.recovery(data, id);
+    if (!reason.isEmpty()) return fail(data, reason);
     OnlineCombatSquad.Fighter fighter = data.combat.fighter(id);
-    if (fighter == null) return fail(data, "Боец не найден");
-    if (data.combat.busy(id)) return fail(data, "Боец занят заданием");
-    if (fighter.health == 100 && fighter.stamina == 100)
-      return fail(data, "Восстановление не требуется");
-    if (data.inventory.amount(OnlineInventory.Resource.MEDICINE)
-            < OnlineCombatRules.RECOVER_MEDICINE
-        || data.inventory.amount(OnlineInventory.Resource.WATER) < OnlineCombatRules.RECOVER_WATER)
-      return fail(data, "Нужно: 1 медикамент и 1 вода из демо-запасов");
-    OnlineInventory inventory =
-        data.inventory
-            .exchange(OnlineInventory.Resource.MEDICINE, 1, null, 0)
-            .exchange(OnlineInventory.Resource.WATER, 1, null, 0);
+    OnlineInventory inventory = data.inventory;
+    int medicine = OnlineActionRules.medicine(fighter), water = OnlineActionRules.water(fighter);
+    if (medicine > 0)
+      inventory = inventory.exchange(OnlineInventory.Resource.MEDICINE, medicine, null, 0);
+    if (water > 0) inventory = inventory.exchange(OnlineInventory.Resource.WATER, water, null, 0);
     List<OnlineCombatSquad.Fighter> fighters = new ArrayList<>(data.combat.fighters);
     for (int i = 0; i < fighters.size(); i++)
       if (fighters.get(i).id.equals(id))
@@ -152,7 +151,10 @@ final class OnlineCombatController {
     return new Change(
         replace(data, inventory, state),
         true,
-        "Восстановление: +35 здоровья, +50 выносливости (до 100)");
+        "Восстановление завершено: здоровье +"
+            + Math.min(OnlineCombatRules.RECOVER_HEALTH, 100 - fighter.health)
+            + " · силы +"
+            + Math.min(OnlineCombatRules.RECOVER_STAMINA, 100 - fighter.stamina));
   }
 
   OnlineWorldGameplay.Data advanceSecond(OnlineWorldGameplay.Data data) {

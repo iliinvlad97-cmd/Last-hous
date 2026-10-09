@@ -9,7 +9,7 @@ final class OnlineCombatRules {
       JITTER_MAX = 110,
       PVP_STAMINA_COST = 12;
   static final int RECOVER_HEALTH = 35,
-      RECOVER_STAMINA = 50,
+      RECOVER_STAMINA = 60,
       RECOVER_MEDICINE = 1,
       RECOVER_WATER = 1;
   static final double ACTION_SECONDS = .24;

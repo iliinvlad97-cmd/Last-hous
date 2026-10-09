@@ -6,6 +6,27 @@ import java.util.*;
 /** Animated radio map; only reads snapshots and cosmetic state, never changes the simulation. */
 final class OnlineWorldRenderer {
   private final GameView view;
+  private final OnlineUiStyle ui;
+  private float ghostOpacity, ghostHeight;
+  private final OnlineMapArt art = new OnlineMapArt();
+  private OnlineWorldGameplay.Data mapData;
+  private final List<Badge> badges = new ArrayList<>();
+  private final Map<String, String> coopLabels = new HashMap<>();
+
+  private static final class Badge {
+    final OnlineCityEvent event;
+    final String label, count;
+
+    Badge(OnlineCityEvent e, long minute, int n) {
+      event = e;
+      label =
+          e.state == OnlineCityEvent.State.ACTIVE
+              ? "ОПЕРАЦИЯ"
+              : Math.max(0, e.expiresMinute - minute) + " мин.";
+      count = n > 1 ? n + " события · список" : "";
+    }
+  }
+
   private final Paint paint = new Paint(3);
   private final Path path = new Path();
   private final OnlineWorldPanelRenderer panel;
@@ -20,9 +41,10 @@ final class OnlineWorldRenderer {
 
   OnlineWorldRenderer(GameView view) {
     this.view = view;
-    panel = new OnlineWorldPanelRenderer(view);
-    combatRenderer = new OnlineCombatRenderer(view);
-    civicRenderer = new OnlineCivicRenderer(view);
+    ui = new OnlineUiStyle(view);
+    panel = new OnlineWorldPanelRenderer(view, ui);
+    combatRenderer = new OnlineCombatRenderer(view, ui);
+    civicRenderer = new OnlineCivicRenderer(view, ui);
   }
 
   // An artist can replace only the backdrop. All normalized objects and hitboxes stay unchanged.
@@ -32,6 +54,8 @@ final class OnlineWorldRenderer {
 
   void draw(Canvas c, OnlineWorldGeometry g) {
     OnlineWorldState state = view.onlineWorld.state;
+    art.prepare(g, state.snapshot, view.scale);
+    prepareStatus(state);
     if (labelsSnapshot != state.snapshot) {
       labels.clear();
       for (OnlineZone zone : state.zones) labels.put(zone.id, zone.name.toUpperCase(Locale.ROOT));
@@ -43,13 +67,13 @@ final class OnlineWorldRenderer {
       backdropBounds =
           new RectF(view.sy(g.left), view.sy(g.top), view.sy(g.right), view.sy(g.bottom));
     }
-    view.box(c, 16, g.top, 404, g.bottom, Color.rgb(17, 26, 33), 13);
+    ui.box(c, 16, g.top, 404, g.bottom, Color.rgb(17, 26, 33), 13);
     c.save();
     c.clipRect(view.sy(g.left), view.sy(g.top), view.sy(g.right), view.sy(g.bottom));
     if (backdrop != null) {
       style(Color.rgb(255, 255, 255), Paint.Style.FILL, 0);
       c.drawBitmap(backdrop, null, backdropBounds, paint);
-    } else drawBackdrop(c, g, state.snapshot);
+    } else art.draw(c);
     for (OnlineZone zone : state.zones) drawZone(c, g, zone, state);
     for (int i = 0; i < state.snapshot.towers.size(); i++)
       drawTower(c, g, state.snapshot.towers.get(i), state.animationSeconds + i);
@@ -105,23 +129,32 @@ final class OnlineWorldRenderer {
     c.restore();
     drawHeader(c, state);
     if (state.confirmationGlow > .01f)
-      view.box(c, 18, 108, 402, 112, alpha(view.good, (int) (state.confirmationGlow * 200)), 2);
+      ui.box(c, 18, 108, 402, 112, alpha(view.good, (int) (state.confirmationGlow * 200)), 2);
     view.hudRenderer.drawNav(c);
+    if (!state.selected()
+        && state.cardOpacity > .01f
+        && ghostOpacity > 0
+        && ghostHeight == g.height) ui.drawGhost(c, state.cardOpacity / ghostOpacity);
+    else if (!state.selected()) ui.clearGhost();
     if (state.selected()) {
+      ui.beginCard();
       if (view.onlineWorld.civicPanel.active()) civicRenderer.draw(c, g);
       else if (view.onlineWorld.combatPanel.active()) combatRenderer.draw(c, g);
       else panel.draw(c, g);
+      ui.endCard();
+      ghostOpacity = state.cardOpacity;
+      ghostHeight = g.height;
     }
   }
 
   private void drawHeader(Canvas c, OnlineWorldState state) {
-    view.box(c, 20, 12, 96, 56, view.panel2, 9);
-    view.bold(c, "‹ КАРТА", 30, 39, 11, view.text);
-    view.bold(c, "ONLINE 0.4", 112, 29, 18, view.text);
-    view.txt(
+    ui.box(c, 20, 12, 96, 56, view.panel2, 9);
+    ui.bold(c, "‹ КАРТА", 30, 39, 11, view.text);
+    ui.bold(c, "ONLINE 0.5", 112, 29, 18, view.text);
+    ui.txt(
         c,
-        state.confirmationGlow > .01f && state.result.startsWith("Операция завершена")
-            ? "ОПЕРАЦИЯ ЗАВЕРШЕНА"
+        state.noticeSeconds > 0
+            ? state.notice
             : state.connection == OnlineWorldState.Connection.DEMO
                 ? "ДЕМО-РЕЖИМ"
                 : state.connection.description,
@@ -129,8 +162,8 @@ final class OnlineWorldRenderer {
         49,
         9,
         view.accent);
-    view.box(c, 300, 12, 400, 56, Color.rgb(58, 44, 29), 9);
-    view.bold(c, "ЗАПАСЫ", 308, 39, 11, view.accent);
+    ui.box(c, 300, 12, 400, 56, Color.rgb(58, 44, 29), 9);
+    ui.bold(c, "ЗАПАСЫ", 308, 39, 11, view.accent);
     tab(c, 20, 140, "КАРТА", !view.onlineWorld.civicPanel.active());
     tab(
         c,
@@ -150,8 +183,8 @@ final class OnlineWorldRenderer {
   }
 
   private void tab(Canvas c, float left, float right, String label, boolean selected) {
-    view.box(c, left, 60, right, 108, selected ? Color.rgb(61, 46, 30) : view.panel2, 8);
-    view.bold(c, label, left + 18, 90, 11, selected ? view.accent : view.muted);
+    ui.box(c, left, 60, right, 108, selected ? Color.rgb(61, 46, 30) : view.panel2, 8);
+    ui.bold(c, label, left + 18, 90, 11, selected ? view.accent : view.muted);
   }
 
   private void drawCityEvents(Canvas c, OnlineWorldGeometry g, OnlineWorldState state) {
@@ -162,122 +195,60 @@ final class OnlineWorldRenderer {
       circle(
           c, g.x(motion.position[0]), g.y(motion.position[1]), 5, view.good, Paint.Style.FILL, 0);
     }
-    for (int i = state.gameplay.civic.events.size() - 1; i >= 0; i--) {
-      OnlineCityEvent e = state.gameplay.civic.events.get(i);
-      if (e.state != OnlineCityEvent.State.AVAILABLE && e.state != OnlineCityEvent.State.ACTIVE)
-        continue;
-      boolean newer = false;
-      for (int j = i + 1; j < state.gameplay.civic.events.size(); j++) {
-        OnlineCityEvent other = state.gameplay.civic.events.get(j);
-        if (other.type.zoneId.equals(e.type.zoneId)
-            && (other.state == OnlineCityEvent.State.AVAILABLE
-                || other.state == OnlineCityEvent.State.ACTIVE)) newer = true;
-      }
-      if (newer) continue;
-      int count = 0;
-      for (OnlineCityEvent other : state.gameplay.civic.events)
-        if (other.type.zoneId.equals(e.type.zoneId)
-            && (other.state == OnlineCityEvent.State.AVAILABLE
-                || other.state == OnlineCityEvent.State.ACTIVE)) count++;
+    for (Badge badge : badges) {
+      OnlineCityEvent e = badge.event;
       float x = g.x(e.x()), y = g.y(e.y());
       int color = e.type.zoneId.equals("pve_industry") ? view.accent : view.danger;
       float pulse = (float) (.5 + .5 * Math.sin(state.animationSeconds * 2.2));
       circle(c, x, y, 14 + 3 * pulse, alpha(color, 45 + (int) (45 * pulse)), Paint.Style.FILL, 0);
       circle(c, x, y, 10, color, Paint.Style.STROKE, 2);
-      view.bold(c, "!", x - 2, y + 4, 12, color);
-      center(
-          c,
-          e.state == OnlineCityEvent.State.ACTIVE
-              ? "ОПЕРАЦИЯ"
-              : Math.max(0, e.expiresMinute - state.gameplay.civic.minute) + " мин.",
-          x,
-          y + 26,
-          9,
-          color);
-      if (count > 1) center(c, count + " события · список", x, y + 38, 8, view.muted);
+      style(color, Paint.Style.STROKE, 1.5f);
+      c.drawPath(art.icon(e.type), paint);
+      center(c, badge.label, x, y + 26, 9, color);
+      if (!badge.count.isEmpty()) center(c, badge.count, x, y + 38, 8, view.muted);
     }
   }
 
-  private void drawBackdrop(
-      Canvas c, OnlineWorldGeometry g, OnlineWorldRepository.Snapshot snapshot) {
-    int road = 0;
-    for (OnlineWorldGeometry.Shape street : snapshot.streets) {
-      shape(c, g, street, false);
-      style(Color.rgb(8, 16, 23), Paint.Style.STROKE, road < 3 ? 26 : 19);
-      paint.setStrokeCap(Paint.Cap.ROUND);
-      c.drawPath(path, paint);
-      style(Color.rgb(43, 54, 61), Paint.Style.STROKE, road < 3 ? 21 : 14);
-      c.drawPath(path, paint);
-      paint.setStrokeCap(Paint.Cap.BUTT);
-      // Broken lane markings derive from the repository's road segments.
-      for (int segment = 1; segment < street.size(); segment++) {
-        float ax = g.x(street.x(segment - 1)), ay = g.y(street.y(segment - 1));
-        float bx = g.x(street.x(segment)), by = g.y(street.y(segment));
-        float length = (float) Math.hypot(bx - ax, by - ay);
-        for (float distance = 12; distance + 5 < length; distance += 30) {
-          float t = distance / length, end = (distance + 5) / length;
-          line(
-              c,
-              ax + (bx - ax) * t,
-              ay + (by - ay) * t,
-              ax + (bx - ax) * end,
-              ay + (by - ay) * end,
-              1,
-              Color.argb(105, 119, 127, 121));
-        }
-      }
-      road++;
+  private void prepareStatus(OnlineWorldState state) {
+    if (mapData == state.gameplay) return;
+    mapData = state.gameplay;
+    badges.clear();
+    coopLabels.clear();
+    for (OnlineZone z : state.zones) {
+      OnlineCoopExpedition e = state.coop(z.id);
+      if (e != null)
+        coopLabels.put(
+            z.id,
+            e.active()
+                ? "ОТРЯД: " + e.elapsedMinutes * 100 / e.durationMinutes + "%"
+                : "ОТЧЁТ ГОТОВ");
     }
-    int index = 0;
-    for (OnlineWorldGeometry.Block block : snapshot.buildings) {
-      float x = g.x(block.x),
-          y = g.y(block.y),
-          w = (g.right - g.left) * block.width,
-          h = (g.bottom - g.top) * block.height;
-      view.box(c, x + 4, y + 5, x + w + 4, y + h + 5, Color.argb(140, 4, 8, 12), 2);
-      view.box(
-          c,
-          x,
-          y,
-          x + w,
-          y + h,
-          block.industrial ? Color.rgb(70, 65, 56) : Color.rgb(48, 62, 72),
-          2);
-      line(c, x + 2, y + 1, x + w - 2, y + 1, 1, Color.rgb(98, 108, 111));
-      path.reset();
-      path.moveTo(view.sy(x + w * .55f), view.sy(y));
-      path.lineTo(view.sy(x + w), view.sy(y + h * .05f));
-      path.lineTo(view.sy(x + w), view.sy(y + h * .48f));
-      path.lineTo(view.sy(x + w * .68f), view.sy(y + h * .20f));
-      path.close();
-      style(Color.rgb(18, 28, 34), Paint.Style.FILL, 0);
-      c.drawPath(path, paint);
-      line(c, x + w * .24f, y + 4, x + w * .45f, y + h * .55f, 1, Color.rgb(15, 23, 29));
-      for (int window = 0; window < 3; window++) {
-        float wx = x + 3 + window * (w - 7) / 3;
-        view.box(c, wx, y + h - 7, wx + 3, y + h - 3, Color.rgb(15, 25, 33), 0);
-      }
-      if (block.industrial) {
-        view.box(c, x + w * .2f, y - 11, x + w * .32f, y + 2, Color.rgb(56, 61, 60), 1);
-        line(c, x + w * .2f, y - 11, x + w * .32f, y - 11, 1, view.muted);
-      }
-      view.box(c, x + index % 4, y + h + 3, x + index % 4 + 6, y + h + 6, Color.rgb(68, 74, 75), 1);
-      index++;
+    Set<String> seen = new HashSet<>();
+    for (int i = state.gameplay.civic.events.size() - 1; i >= 0; i--) {
+      OnlineCityEvent e = state.gameplay.civic.events.get(i);
+      if (e.state != OnlineCityEvent.State.AVAILABLE && e.state != OnlineCityEvent.State.ACTIVE
+          || !seen.add(e.type.zoneId)) continue;
+      int count = 0;
+      for (OnlineCityEvent other : state.gameplay.civic.events)
+        if (other.type.zoneId.equals(e.type.zoneId)
+            && (other.state == OnlineCityEvent.State.AVAILABLE
+                || other.state == OnlineCityEvent.State.ACTIVE)) count++;
+      badges.add(new Badge(e, state.gameplay.civic.minute, count));
     }
   }
 
   private void drawZone(Canvas c, OnlineWorldGeometry g, OnlineZone zone, OnlineWorldState state) {
     int color = zoneColor(zone.type);
-    shape(c, g, zone.boundary, true);
+    Path zonePath = art.zone(zone.id);
     style(alpha(color, 24), Paint.Style.FILL, 0);
-    c.drawPath(path, paint);
+    c.drawPath(zonePath, paint);
     boolean selected = zone.id.equals(state.zoneId);
     float pulse = (float) (.7 + .3 * Math.sin(state.animationSeconds * 2.2));
     style(
         alpha(color, selected ? 120 + (int) (100 * state.selectionStrength * pulse) : 105),
         Paint.Style.STROKE,
         selected ? 1.5f + state.selectionStrength : 1);
-    c.drawPath(path, paint);
+    c.drawPath(zonePath, paint);
     center(
         c,
         labels.get(zone.id),
@@ -285,18 +256,15 @@ final class OnlineWorldRenderer {
         g.y(zone.labelPosition.y),
         8,
         alpha(color, selected ? 255 : 215));
-    if (zone.type == OnlineZone.Type.PVE) {
-      OnlineCoopExpedition expedition = state.coop(zone.id);
-      if (expedition != null)
-        center(
-            c,
-            expedition.active()
-                ? "ОТРЯД: " + expedition.elapsedMinutes * 100 / expedition.durationMinutes + "%"
-                : "ОТЧЁТ ГОТОВ",
-            g.x(zone.labelPosition.x),
-            g.y(zone.labelPosition.y) + 14,
-            8,
-            view.good);
+    String progress = coopLabels.get(zone.id);
+    if (progress != null)
+      center(c, progress, g.x(zone.labelPosition.x), g.y(zone.labelPosition.y) + 14, 8, view.good);
+    if (zone.type == OnlineZone.Type.PVP) {
+      float x = g.x(zone.labelPosition.x) - 12, y = g.y(zone.labelPosition.y) + 14;
+      line(c, x, y - 5, x - 5, y + 4, 1.2f, view.danger);
+      line(c, x - 5, y + 4, x + 5, y + 4, 1.2f, view.danger);
+      line(c, x + 5, y + 4, x, y - 5, 1.2f, view.danger);
+      ui.txt(c, "PvP", x + 9, y + 4, 8, view.danger);
     }
   }
 
@@ -318,7 +286,7 @@ final class OnlineWorldRenderer {
         Color.argb(selected ? 45 + (int) (45 * state.selectionStrength) : 32, 207, 153, 80),
         Paint.Style.FILL,
         0);
-    view.box(c, x - 17, y - 16, x + 17, y + 17, Color.rgb(34, 43, 45), 6);
+    ui.box(c, x - 17, y - 16, x + 17, y + 17, Color.rgb(34, 43, 45), 6);
     line(c, x - 12, y - 2, x, y - 11, 2, view.accent);
     line(c, x, y - 11, x + 12, y - 2, 2, view.accent);
     line(c, x - 9, y - 1, x - 9, y + 11, 1.5f, view.text);
@@ -329,7 +297,9 @@ final class OnlineWorldRenderer {
             (.72
                 + .18 * Math.sin(state.animationSeconds * 2.0 + index * .9)
                 + .10 * Math.sin(state.animationSeconds * .7 + index));
-    view.box(c, x - 3, y + 1, x + 3, y + 9, Color.argb((int) (255 * light), 229, 174, 93), 1);
+    circle(c, x, y + 4, 18, Color.argb((int) (22 * light), 229, 174, 93), Paint.Style.FILL, 0);
+    circle(c, x, y + 4, 10, Color.argb((int) (30 * light), 229, 174, 93), Paint.Style.FILL, 0);
+    ui.box(c, x - 3, y + 1, x + 3, y + 9, Color.argb((int) (255 * light), 229, 174, 93), 1);
     center(c, shelter.name, x, y + 32, 9, selected ? view.accent : view.text);
     circle(
         c,
@@ -352,6 +322,18 @@ final class OnlineWorldRenderer {
         Color.argb((int) (100 * Math.sin(Math.PI * pulse)), 104, 165, 185),
         Paint.Style.STROKE,
         1);
+    float second = (pulse + .5f) % 1;
+    circle(
+        c,
+        x,
+        y - 13,
+        10 + 19 * second,
+        Color.argb((int) (65 * Math.sin(Math.PI * second)), 104, 165, 185),
+        Paint.Style.STROKE,
+        1);
+    line(c, x - 10, y + 15, x + 10, y + 15, 2, Color.rgb(61, 87, 96));
+    line(c, x - 6, y + 8, x + 4, y - 6, 1, view.blue);
+    line(c, x + 6, y + 8, x - 4, y - 6, 1, view.blue);
     line(c, x, y - 15, x - 9, y + 13, 1.5f, view.blue);
     line(c, x, y - 15, x + 9, y + 13, 1.5f, view.blue);
     line(c, x - 7, y + 6, x + 7, y + 6, 1, view.blue);
@@ -377,6 +359,18 @@ final class OnlineWorldRenderer {
       style(Color.argb(16, 152, 171, 180), Paint.Style.FILL, 0);
       c.drawOval(view.sy(x - 36), view.sy(y - 9), view.sy(x + 36), view.sy(y + 9), paint);
       i++;
+    }
+    int sources = 0;
+    for (OnlineWorldGeometry.Block b : state.snapshot.buildings) {
+      if (!b.industrial || sources++ >= 3) continue;
+      float bx = g.x(b.x) + (g.right - g.left) * b.width * .26f, by = g.y(b.y) - 12;
+      for (int puff = 0; puff < 2; puff++) {
+        float t = (float) ((state.animationSeconds * .12 + puff * .5 + sources * .19) % 1);
+        float x = bx + 5 * t, y = by - 22 * t, r = 4 + 9 * t;
+        style(Color.argb((int) (24 * Math.sin(t * Math.PI)), 165, 161, 146), Paint.Style.FILL, 0);
+        c.drawOval(
+            view.sy(x - r), view.sy(y - r * .45f), view.sy(x + r), view.sy(y + r * .45f), paint);
+      }
     }
   }
 
@@ -408,8 +402,8 @@ final class OnlineWorldRenderer {
 
   private void center(Canvas c, String text, float x, float y, int size, int color) {
     view.p.setTextSize(view.sy(size));
-    view.p.setTypeface(Typeface.create("sans", Typeface.NORMAL));
-    view.txt(c, text, x - view.p.measureText(text) / view.scale / 2, y, size, color);
+    view.p.setTypeface(OnlineUiStyle.REGULAR);
+    ui.txt(c, text, x - view.p.measureText(text) / view.scale / 2, y, size, color);
   }
 
   static int zoneColor(OnlineZone.Type type) {
