@@ -11,7 +11,8 @@ final class CityMapController {
   enum TouchResult {
     NONE,
     CONSUMED,
-    HOME
+    HOME,
+    RADIO
   }
 
   static List<MapLocation> defaultLocations() {
@@ -447,6 +448,7 @@ final class CityMapController {
       return TouchResult.CONSUMED;
     }
     if (y >= 39 && y <= 69) {
+      if (x >= 284 && x <= 400) return TouchResult.RADIO;
       if (x >= 20 && x <= 144) {
         districtsLayer = false;
         districtFilterId = "";

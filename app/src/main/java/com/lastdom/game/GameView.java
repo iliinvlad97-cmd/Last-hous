@@ -7,7 +7,7 @@ import android.view.*;
 
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
-  static final int HOME = 0, CITY_MAP = 5;
+  static final int HOME = 0, CITY_MAP = 5, ONLINE_WORLD = 6;
   static final String VERSION_LABEL = "v1.1.1 • CITY EXPLORATION • POLISH";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
@@ -47,6 +47,8 @@ public final class GameView extends View {
   final DefensePanelController defensePanel = new DefensePanelController(this);
   final DefensePanelRenderer defenseRenderer = new DefensePanelRenderer(this);
   final CityMapController cityMap;
+  final OnlineWorldController onlineWorld;
+  final OnlineWorldRenderer onlineWorldRenderer;
   final JournalController journal = new JournalController(this);
   final JournalRenderer journalRenderer = new JournalRenderer(this);
   final RoomUpgradePanelController roomUpgradePanel;
@@ -60,11 +62,18 @@ public final class GameView extends View {
       new ExpeditionPreparationRenderer(this);
 
   public GameView(Context context) {
+    this(context, new MockOnlineWorldRepository(), System::nanoTime);
+  }
+
+  GameView(
+      Context context, OnlineWorldRepository repository, java.util.function.LongSupplier clock) {
     super(context);
     shelterBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.shelter_clean);
     fullSceneBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.shelter_full_scene);
     game = new GameController(context.getSharedPreferences("save_v02", 0), this::invalidate);
     cityMap = new CityMapController(game);
+    onlineWorld = new OnlineWorldController(repository, clock);
+    onlineWorldRenderer = new OnlineWorldRenderer(this);
     roomUpgradePanel = new RoomUpgradePanelController(game);
     roomUpgradePanel.defenseOpen = defensePanel::openStatus;
     Expedition restored = game.expeditionController.active();
@@ -120,7 +129,11 @@ public final class GameView extends View {
     else if (game.screen == 2) overlayRenderer.drawJournal(c);
     else if (game.screen == 3) overlayRenderer.drawRooms(c);
     else if (game.screen == 4) overlayRenderer.drawRoomDetail(c);
-    else overlayRenderer.drawMap(c);
+    else if (game.screen == ONLINE_WORLD) {
+      onlineWorld.frame();
+      onlineWorldRenderer.draw(c, onlineWorld.geometry(H / scale));
+      postInvalidateOnAnimation();
+    } else overlayRenderer.drawMap(c);
     if (game.overlay == 0
         && !game.event
         && !cityMap.eventPanel
@@ -172,6 +185,7 @@ public final class GameView extends View {
 
   private boolean navigate(float x, float y, float logicalHeight) {
     if (y <= logicalHeight - 78) return false;
+    int previousScreen = game.screen;
     int index = (int) ((x - 18) / 77);
     if (index == 0) {
       game.screen = HOME;
@@ -199,6 +213,7 @@ public final class GameView extends View {
       }
       game.save();
     }
+    if (previousScreen == ONLINE_WORLD && game.screen != ONLINE_WORLD) onlineWorld.leave();
     invalidate();
     return true;
   }
@@ -259,6 +274,22 @@ public final class GameView extends View {
         invalidate();
         return true;
       }
+    }
+    if (game.screen == ONLINE_WORLD
+        && !game.event
+        && !game.gameOver
+        && !game.jobMenu
+        && !cityMap.expeditionPanel
+        && !cityMap.eventPanel) {
+      float x = e.getX() / scale, y = e.getY() / scale, height = H / scale;
+      OnlineWorldController.TouchResult result =
+          onlineWorld.touch(e.getAction(), x, y, onlineWorld.geometry(height));
+      if (result == OnlineWorldController.TouchResult.BACK) {
+        onlineWorld.leave();
+        game.screen = CITY_MAP;
+      } else if (result == OnlineWorldController.TouchResult.NAVIGATION) navigate(x, y, height);
+      invalidate();
+      return true;
     }
     if (e.getAction() != MotionEvent.ACTION_UP) return true;
     float x = e.getX() / scale, y = e.getY() / scale, hh = H / scale;
@@ -337,7 +368,10 @@ public final class GameView extends View {
       invalidate();
     } else if (game.screen == CITY_MAP) {
       CityMapController.TouchResult result = cityMap.onTouch(x, y, new CityMapLayout(hh));
-      if (result == CityMapController.TouchResult.HOME) {
+      if (result == CityMapController.TouchResult.RADIO) {
+        onlineWorld.enter();
+        game.screen = ONLINE_WORLD;
+      } else if (result == CityMapController.TouchResult.HOME) {
         game.screen = HOME;
         game.overlay = 0;
         cityMap.closeSelection();

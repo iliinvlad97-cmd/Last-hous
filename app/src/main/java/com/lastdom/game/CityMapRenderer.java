@@ -72,6 +72,8 @@ final class CityMapRenderer {
     text(canvas, "СТАРЫЕ ТОЧКИ", 30, 59, 10, view.cityMap.districtsLayer ? INK : view.bg, true);
     rounded(canvas, 152, 39, 276, 69, view.cityMap.districtsLayer ? view.accent : view.panel2, 8);
     text(canvas, "РАЙОНЫ", 177, 59, 10, view.cityMap.districtsLayer ? view.bg : INK, true);
+    rounded(canvas, 284, 39, 400, 69, view.panel2, 8);
+    text(canvas, "РАДИОСЕТЬ", 299, 59, 11, WARM, true);
   }
 
   private void drawHeader(Canvas canvas) {
@@ -86,9 +88,8 @@ final class CityMapRenderer {
         INK,
         true);
     text(canvas, GameView.VERSION_LABEL, 20, 34, 8, MUTED, false);
-    rounded(canvas, 284, 12, 400, 53, Color.rgb(28, 40, 51), 9);
-    text(canvas, "Д" + view.game.day + "  " + view.game.clock(), 296, 30, 11, INK, true);
-    text(canvas, view.game.phase(), 296, 46, 8, WARM, false);
+    rounded(canvas, 284, 12, 400, 34, Color.rgb(28, 40, 51), 9);
+    text(canvas, "Д" + view.game.day + "  " + view.game.clock(), 296, 28, 11, INK, true);
   }
 
   private void drawDistrict(Canvas c, CityMapLayout m) {

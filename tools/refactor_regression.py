@@ -134,7 +134,7 @@ public class RadialGradient extends Shader {private final String args;public Rad
 ''',
     "android/graphics/Path.java": r'''
 package android.graphics;
-public class Path {private final java.util.List<String> steps=new java.util.ArrayList<>();public void moveTo(float x,float y){steps.add("M"+x+","+y);}public void lineTo(float x,float y){steps.add("L"+x+","+y);}public void close(){steps.add("Z");}public String toString(){return steps.toString();}}
+public class Path {private final java.util.List<String> steps=new java.util.ArrayList<>();public void moveTo(float x,float y){steps.add("M"+x+","+y);}public void lineTo(float x,float y){steps.add("L"+x+","+y);}public void close(){steps.add("Z");}public void reset(){steps.clear();}public String toString(){return steps.toString();}}
 ''',
     "test/TestTime.java": "package test; public class TestTime {public static long now(){return 123456789L;}}",
 }
