@@ -40,6 +40,13 @@ final class OnlineInventory {
     return balances.get(resource);
   }
 
+  OnlineInventory credit(OnlineInventory reward) {
+    EnumMap<Resource, Integer> values = new EnumMap<>(balances);
+    for (Resource resource : Resource.values())
+      values.put(resource, Math.addExact(amount(resource), reward.amount(resource)));
+    return new OnlineInventory(values);
+  }
+
   OnlineInventory exchange(Resource cost, int quantity, Resource reward, int output) {
     if (quantity <= 0 || output < 0 || amount(cost) < quantity)
       throw new IllegalArgumentException("Insufficient demo resources");

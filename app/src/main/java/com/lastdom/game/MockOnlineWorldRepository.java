@@ -8,6 +8,7 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
   private final Snapshot world;
   private OnlineWorldGameplay.Data data;
   private boolean storageError;
+  private final OnlineCombatController combatController = new OnlineCombatController();
 
   MockOnlineWorldRepository() {
     this(new OnlineDemoSaveStore(null));
@@ -85,7 +86,12 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
     operations.add(operation(offer, 0));
     return publish(
         new OnlineWorldGameplay.Data(
-            inventory, data.offers, operations, data.reputation + offer.reputation, data.pvpZoneId),
+            inventory,
+            data.offers,
+            operations,
+            data.reputation + offer.reputation,
+            data.pvpZoneId,
+            data.combat),
         offer.kind == OnlineWorldGameplay.Kind.HELP
             ? "Помощь отправлена. Репутация +" + offer.reputation
             : "Сделка выполнена. " + offer.summary());
@@ -98,7 +104,7 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
       return new OnlineWorldGameplay.Result(false, "Демо-отряд уже подготовлен");
     return publish(
         new OnlineWorldGameplay.Data(
-            data.inventory, data.offers, data.operations, data.reputation, zoneId),
+            data.inventory, data.offers, data.operations, data.reputation, zoneId, data.combat),
         "Демо-отряд подготовлен. Бой не запускается.");
   }
 
@@ -106,20 +112,61 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
     if (data.pvpZoneId.isEmpty()) return new OnlineWorldGameplay.Result(false, "PvP уже выключено");
     return publish(
         new OnlineWorldGameplay.Data(
-            data.inventory, data.offers, data.operations, data.reputation, ""),
+            data.inventory, data.offers, data.operations, data.reputation, "", data.combat),
         "Демо-подготовка отменена");
   }
 
+  private OnlineWorldGameplay.Result publishCombat(OnlineCombatController.Change change) {
+    if (storageError) return new OnlineWorldGameplay.Result(false, "Ошибка демо-сохранения");
+    return change.result.success ? publish(change.data, change.result.message) : change.result;
+  }
+
+  public synchronized OnlineWorldGameplay.Result startPvp(
+      String id,
+      String zone,
+      List<String> fighters,
+      OnlineCombatRules.Tactic tactic,
+      long seed,
+      boolean confirmed) {
+    if (storageError) return new OnlineWorldGameplay.Result(false, "Ошибка демо-сохранения");
+    return publishCombat(
+        combatController.startPvp(data, id, zone, fighters, tactic, seed, confirmed));
+  }
+
+  public synchronized OnlineWorldGameplay.Result startCoop(
+      String id, String zone, String ally, List<String> fighters, long seed, boolean confirmed) {
+    if (storageError) return new OnlineWorldGameplay.Result(false, "Ошибка демо-сохранения");
+    return publishCombat(
+        combatController.startCoop(data, world, id, zone, ally, fighters, seed, confirmed));
+  }
+
+  public synchronized OnlineWorldGameplay.Result recover(String fighter) {
+    return publishCombat(combatController.recover(data, fighter));
+  }
+
+  public synchronized boolean advanceMinute() {
+    if (storageError) return false;
+    OnlineWorldGameplay.Data replacement = combatController.advanceMinute(data);
+    return replacement != data && publish(replacement, "").success;
+  }
+
   public synchronized boolean advanceSecond() {
-    if (storageError || !data.hasActive()) return false;
-    List<OnlineWorldGameplay.Operation> operations = new ArrayList<>();
-    for (OnlineWorldGameplay.Operation operation : data.operations)
-      operations.add(operation.active() ? operation.advance() : operation);
-    return publish(
-            new OnlineWorldGameplay.Data(
-                data.inventory, data.offers, operations, data.reputation, data.pvpZoneId),
-            "")
-        .success;
+    if (storageError) return false;
+    OnlineWorldGameplay.Data replacement = combatController.advanceSecond(data);
+    if (data.hasActive()) {
+      List<OnlineWorldGameplay.Operation> operations = new ArrayList<>();
+      for (OnlineWorldGameplay.Operation operation : data.operations)
+        operations.add(operation.active() ? operation.advance() : operation);
+      replacement =
+          new OnlineWorldGameplay.Data(
+              replacement.inventory,
+              data.offers,
+              operations,
+              data.reputation,
+              data.pvpZoneId,
+              replacement.combat);
+    }
+    return replacement != data && publish(replacement, "").success;
   }
 
   OnlineWorldGameplay.Operation operation(OnlineWorldGameplay.Offer offer, int elapsed) {

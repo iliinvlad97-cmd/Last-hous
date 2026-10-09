@@ -27,8 +27,10 @@ public final class GameView extends View {
       new Runnable() {
         public void run() {
           if (!game.paused && !game.gameOver && !game.event) {
-            for (int i = 0; i < game.speed && !game.event && !game.gameOver; i++)
+            for (int i = 0; i < game.speed && !game.event && !game.gameOver; i++) {
               game.advanceMinute();
+              onlineWorld.advanceMinute();
+            }
             cityMap.openPendingReport();
             defensePanel.pending();
             invalidate();

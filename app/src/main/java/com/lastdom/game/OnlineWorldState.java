@@ -31,7 +31,13 @@ final class OnlineWorldState {
     HELP,
     INVENTORY,
     HISTORY,
-    DELIVERY
+    DELIVERY,
+    ROSTER,
+    COMBAT_HISTORY,
+    PVP_PREP,
+    COOP_PREP,
+    BATTLE,
+    COOP_REPORT
   }
 
   Panel panel = Panel.OBJECT;

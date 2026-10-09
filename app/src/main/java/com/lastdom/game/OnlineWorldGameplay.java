@@ -131,6 +131,7 @@ final class OnlineWorldGameplay {
     final List<Operation> operations;
     final int reputation;
     final String pvpZoneId;
+    final OnlineBattleRepository.State combat;
 
     Data(
         OnlineInventory inventory,
@@ -138,6 +139,23 @@ final class OnlineWorldGameplay {
         List<Operation> operations,
         int reputation,
         String pvpZoneId) {
+      this(
+          inventory,
+          offers,
+          operations,
+          reputation,
+          pvpZoneId,
+          OnlineBattleRepository.State.initial());
+    }
+
+    Data(
+        OnlineInventory inventory,
+        List<Offer> offers,
+        List<Operation> operations,
+        int reputation,
+        String pvpZoneId,
+        OnlineBattleRepository.State combat) {
+      this.combat = Objects.requireNonNull(combat);
       Set<String> ids = new HashSet<>(), operationsIds = new HashSet<>();
       for (Offer offer : offers)
         if (!ids.add(offer.id)) throw new IllegalArgumentException("Duplicate demo offer");

@@ -11,6 +11,7 @@ final class OnlineWorldController {
   }
 
   OnlineWorldState state;
+  final OnlineCombatPanelController combatPanel = new OnlineCombatPanelController(this);
   private final OnlineWorldRepository repository;
   private final LongSupplier clock;
   private long previousNanos = Long.MIN_VALUE;
@@ -61,6 +62,7 @@ final class OnlineWorldController {
     visible = true;
     previousNanos = Long.MIN_VALUE;
     syncGameplay();
+    combatPanel.resumed();
     for (int i = 0; i < state.gameplay.operations.size(); i++)
       state.deliverySeconds[i] = state.gameplay.operations.get(i).elapsedSeconds;
   }
@@ -72,6 +74,13 @@ final class OnlineWorldController {
       if (!visible)
         for (int i = 0; i < state.gameplay.operations.size(); i++)
           state.deliverySeconds[i] = state.gameplay.operations.get(i).elapsedSeconds;
+      panelRevision++;
+    }
+  }
+
+  void advanceMinute() {
+    if (repository.advanceMinute()) {
+      syncGameplay();
       panelRevision++;
     }
   }
@@ -88,6 +97,46 @@ final class OnlineWorldController {
           i * 2);
     }
     state.pvpEnabled = !state.gameplay.pvpZoneId.isEmpty();
+  }
+
+  void acceptResult(OnlineWorldGameplay.Result result) {
+    syncGameplay();
+    state.result = result.message;
+    state.resultSuccess = result.success;
+    if (result.success) state.confirmationGlow = 1;
+    panelRevision++;
+  }
+
+  OnlineWorldGameplay.Result recover(String id) {
+    OnlineWorldGameplay.Result result =
+        demoActionsAvailable()
+            ? repository.recover(id)
+            : new OnlineWorldGameplay.Result(false, "Действие недоступно");
+    acceptResult(result);
+    return result;
+  }
+
+  OnlineWorldGameplay.Result startMission(
+      String id,
+      java.util.List<String> fighters,
+      OnlineCombatRules.Tactic tactic,
+      String allyId,
+      boolean confirmed) {
+    if (!demoActionsAvailable() || !combatPanel.confirming || !confirmed)
+      return new OnlineWorldGameplay.Result(false, "Требуется отдельное подтверждение");
+    long seed = clock.getAsLong() ^ ((long) state.gameplay.combat.nextId * 0x9e3779b97f4a7c15L);
+    OnlineWorldGameplay.Result result;
+    if (state.panel == OnlineWorldState.Panel.PVP_PREP)
+      result =
+          repository.startPvp(
+              id, state.zoneId, new java.util.ArrayList<>(fighters), tactic, seed, true);
+    else if (state.panel == OnlineWorldState.Panel.COOP_PREP)
+      result =
+          repository.startCoop(
+              id, state.zoneId, allyId, new java.util.ArrayList<>(fighters), seed, true);
+    else result = new OnlineWorldGameplay.Result(false, "Откройте подготовку задания");
+    acceptResult(result);
+    return result;
   }
 
   boolean demoActionsAvailable() {
@@ -166,6 +215,7 @@ final class OnlineWorldController {
     // Returning from background or a long render stall must not teleport the patrol.
     if (seconds < 0 || seconds > .25) seconds = 0;
     state.animationSeconds += seconds;
+    combatPanel.frame(seconds);
     float opacity = (float) (1 - Math.exp(-seconds / .12));
     float highlight = (float) (1 - Math.exp(-seconds / .18));
     float target = state.selected() ? 1 : 0;
@@ -191,6 +241,7 @@ final class OnlineWorldController {
   void closeCard() {
     state.shelterId = state.zoneId = state.squadId = "";
     state.confirmingPvp = false;
+    combatPanel.confirming = false;
     state.panel = OnlineWorldState.Panel.OBJECT;
     state.offerId = state.deliveryId = state.result = "";
     state.cardOpacity = state.selectionStrength = 0;
@@ -219,6 +270,7 @@ final class OnlineWorldController {
   }
 
   TouchResult touch(int action, float x, float y, OnlineWorldGeometry g) {
+    if (combatPanel.active()) return combatPanel.touch(action, x, y, g);
     boolean card = state.selected();
     if (action == android.view.MotionEvent.ACTION_CANCEL) {
       dragging = moved = false;
@@ -253,6 +305,24 @@ final class OnlineWorldController {
       return TouchResult.CONSUMED;
     }
     if (y >= g.height - 78) return TouchResult.NAVIGATION;
+    if (card
+        && x >= 280
+        && x <= 350
+        && y >= g.panelTop + 12
+        && y <= g.panelTop + 52
+        && !state.confirmingPvp
+        && demoActionsAvailable()) {
+      if (state.panel == OnlineWorldState.Panel.INVENTORY)
+        combatPanel.open(OnlineWorldState.Panel.ROSTER);
+      else if (state.panel == OnlineWorldState.Panel.OBJECT
+          && state.zone() != null
+          && state.zone().type != OnlineZone.Type.SAFE)
+        combatPanel.open(
+            state.zone().type == OnlineZone.Type.PVP
+                ? OnlineWorldState.Panel.PVP_PREP
+                : OnlineWorldState.Panel.COOP_PREP);
+      return TouchResult.CONSUMED;
+    }
     if (card) {
       if (g.closeButton(x, y)) {
         if (state.confirmingPvp) {

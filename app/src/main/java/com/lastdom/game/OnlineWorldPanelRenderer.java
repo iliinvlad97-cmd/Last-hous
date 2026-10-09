@@ -41,6 +41,23 @@ final class OnlineWorldPanelRenderer {
           2);
     view.bold(
         c, title, 34, g.panelTop + 34, 16, opacity(state.confirmingPvp ? view.danger : view.text));
+    if (!state.confirmingPvp
+        && controller.demoActionsAvailable()
+        && (state.panel == OnlineWorldState.Panel.INVENTORY
+            || state.panel == OnlineWorldState.Panel.OBJECT
+                && state.zone() != null
+                && state.zone().type != OnlineZone.Type.SAFE)) {
+      view.box(c, 280, g.panelTop + 12, 350, g.panelTop + 52, opacity(view.accent), 8);
+      view.bold(
+          c,
+          state.panel == OnlineWorldState.Panel.INVENTORY
+              ? "ОТРЯД"
+              : state.zone().type == OnlineZone.Type.PVP ? "БОЙ" : "PvE",
+          290,
+          g.panelTop + 37,
+          11,
+          opacity(view.bg));
+    }
     view.bold(c, "×", 372, g.panelTop + 31, 22, opacity(view.muted));
     view.txt(c, subtitle, 34, g.panelTop + 63, 12, opacity(view.accent));
     c.save();
@@ -210,13 +227,15 @@ final class OnlineWorldPanelRenderer {
     } else if (state.confirmingPvp) {
       title = "ДОБРОВОЛЬНЫЙ PvP";
       subtitle = "Подтверждение участия";
-      fact("ДЕМО: сейчас нет боёв и потерь ресурсов.");
+      fact("ДЕМО: реальные жители и запасы не участвуют.");
       fact("Состав: 3 виртуальных участника");
       for (String member : OnlineWorldGameplay.PVP_SQUAD) fact(member);
       add("Условия: отдельное согласие. Жители одиночного убежища не участвуют.");
       add("В будущем PvP может привести к столкновениям с другими игроками и потерям груза.");
       add("Участие добровольное. Без подтверждения PvP остаётся выключенным.");
-      add("Сейчас включается только демо-отметка согласия: боёв, игроков и потерь ресурсов нет.");
+      add(
+          "Согласие включает доступ к подготовке. Каждый локальный бой требует отдельного выбора"
+              + " отряда и подтверждения.");
       add("Можно отказаться или закрыть карточку. Это не изменит одиночную игру.");
     } else if (shelter != null) {
       title = "ВИРТУАЛЬНОЕ УБЕЖИЩЕ";
@@ -252,8 +271,14 @@ final class OnlineWorldPanelRenderer {
                 + " жители не затрагиваются.");
       }
       if (zone.type == OnlineZone.Type.PVP)
-        add("Реальных боёв и потерь ресурсов нет. Включение требует отдельного подтверждения.");
-      else add("На этом этапе район можно только осмотреть. Задания и бои пока недоступны.");
+        add(
+            "Настоящих игроков нет. Кнопка «БОЙ» открывает локальное столкновение с отдельным"
+                + " подтверждением.");
+      else
+        add(
+            zone.type == OnlineZone.Type.PVE
+                ? "Кнопка «PvE» открывает совместное задание с виртуальным союзником."
+                : "Безопасный район: PvP здесь недоступен.");
       add("Демо-карта не открывает и не закрывает районы одиночной игры.");
     } else if (squad != null) {
       title = "ДЕМО-ОТРЯД";

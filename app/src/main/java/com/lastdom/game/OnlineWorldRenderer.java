@@ -9,6 +9,7 @@ final class OnlineWorldRenderer {
   private final Paint paint = new Paint(3);
   private final Path path = new Path();
   private final OnlineWorldPanelRenderer panel;
+  private final OnlineCombatRenderer combatRenderer;
   private final Map<String, String> labels = new HashMap<>();
   private Bitmap backdrop;
   private RectF backdropBounds;
@@ -19,6 +20,7 @@ final class OnlineWorldRenderer {
   OnlineWorldRenderer(GameView view) {
     this.view = view;
     panel = new OnlineWorldPanelRenderer(view);
+    combatRenderer = new OnlineCombatRenderer(view);
   }
 
   // An artist can replace only the backdrop. All normalized objects and hitboxes stay unchanged.
@@ -102,13 +104,16 @@ final class OnlineWorldRenderer {
     if (state.confirmationGlow > .01f)
       view.box(c, 18, 108, 402, 112, alpha(view.good, (int) (state.confirmationGlow * 200)), 2);
     view.hudRenderer.drawNav(c);
-    if (state.selected()) panel.draw(c, g);
+    if (state.selected()) {
+      if (view.onlineWorld.combatPanel.active()) combatRenderer.draw(c, g);
+      else panel.draw(c, g);
+    }
   }
 
   private void drawHeader(Canvas c, OnlineWorldState state) {
     view.box(c, 20, 12, 96, 56, view.panel2, 9);
     view.bold(c, "‹ КАРТА", 30, 39, 11, view.text);
-    view.bold(c, "ONLINE 0.2", 112, 29, 18, view.text);
+    view.bold(c, "ONLINE 0.3", 112, 29, 18, view.text);
     view.txt(c, "РАДИОСЕТЬ", 113, 49, 10, view.muted);
     view.box(c, 300, 12, 400, 56, Color.rgb(58, 44, 29), 9);
     view.bold(c, "ЗАПАСЫ", 308, 39, 11, view.accent);
@@ -117,7 +122,9 @@ final class OnlineWorldRenderer {
     view.txt(c, "PvE", 155, 98, 10, view.accent);
     view.txt(
         c,
-        state.pvpEnabled ? "PvP: ДЕМО-ВКЛ" : "PvP: ВЫКЛ",
+        state.gameplay.combat.battles.stream().anyMatch(b -> b.active())
+            ? "PvP: ДЕМО-БОЙ"
+            : state.pvpEnabled ? "PvP: ДЕМО-ВКЛ" : "PvP: ВЫКЛ",
         244,
         98,
         10,
