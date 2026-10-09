@@ -26,6 +26,12 @@ final class OnlineWorldState {
   final float[] squadPositions;
 
   enum Panel {
+    ALLIANCE,
+    ALLIANCE_NAME,
+    EVENTS,
+    CITY_EVENT,
+    OPERATION_PREP,
+    OPERATION_REPORT,
     OBJECT,
     TRADE,
     HELP,

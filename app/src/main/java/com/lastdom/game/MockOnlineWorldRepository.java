@@ -91,7 +91,8 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
             operations,
             data.reputation + offer.reputation,
             data.pvpZoneId,
-            data.combat),
+            data.combat,
+            data.civic),
         offer.kind == OnlineWorldGameplay.Kind.HELP
             ? "Помощь отправлена. Репутация +" + offer.reputation
             : "Сделка выполнена. " + offer.summary());
@@ -104,7 +105,13 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
       return new OnlineWorldGameplay.Result(false, "Демо-отряд уже подготовлен");
     return publish(
         new OnlineWorldGameplay.Data(
-            data.inventory, data.offers, data.operations, data.reputation, zoneId, data.combat),
+            data.inventory,
+            data.offers,
+            data.operations,
+            data.reputation,
+            zoneId,
+            data.combat,
+            data.civic),
         "Демо-отряд подготовлен. Бой не запускается.");
   }
 
@@ -112,12 +119,19 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
     if (data.pvpZoneId.isEmpty()) return new OnlineWorldGameplay.Result(false, "PvP уже выключено");
     return publish(
         new OnlineWorldGameplay.Data(
-            data.inventory, data.offers, data.operations, data.reputation, "", data.combat),
+            data.inventory,
+            data.offers,
+            data.operations,
+            data.reputation,
+            "",
+            data.combat,
+            data.civic),
         "Демо-подготовка отменена");
   }
 
   private OnlineWorldGameplay.Result publishCombat(OnlineCombatController.Change change) {
     if (storageError) return new OnlineWorldGameplay.Result(false, "Ошибка демо-сохранения");
+    if (change.data == data) return change.result;
     return change.result.success ? publish(change.data, change.result.message) : change.result;
   }
 
@@ -147,6 +161,7 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
   public synchronized boolean advanceMinute() {
     if (storageError) return false;
     OnlineWorldGameplay.Data replacement = combatController.advanceMinute(data);
+    replacement = new OnlineCityEventController().advance(replacement);
     return replacement != data && publish(replacement, "").success;
   }
 
@@ -164,9 +179,39 @@ final class MockOnlineWorldRepository implements OnlineWorldRepository {
               operations,
               data.reputation,
               data.pvpZoneId,
-              replacement.combat);
+              replacement.combat,
+              replacement.civic);
     }
     return replacement != data && publish(replacement, "").success;
+  }
+
+  public synchronized OnlineWorldGameplay.Result activateCivic() {
+    return publishCombat(new OnlineAllianceController().activate(data));
+  }
+
+  public synchronized OnlineWorldGameplay.Result createAlliance(String name) {
+    return publishCombat(new OnlineAllianceController().create(data, name));
+  }
+
+  public synchronized OnlineWorldGameplay.Result invite(String id) {
+    return publishCombat(new OnlineAllianceController().invite(data, id));
+  }
+
+  public synchronized OnlineWorldGameplay.Result createDemoEvent() {
+    return publishCombat(new OnlineCityEventController().spawnDemo(data));
+  }
+
+  public synchronized OnlineWorldGameplay.Result startOperation(
+      String id,
+      String event,
+      List<String> fighters,
+      List<String> allies,
+      long seed,
+      boolean confirmed) {
+    if (storageError) return new OnlineWorldGameplay.Result(false, "Ошибка демо-сохранения");
+    return publishCombat(
+        new OnlineCityEventController()
+            .start(data, world, id, event, fighters, allies, seed, confirmed));
   }
 
   OnlineWorldGameplay.Operation operation(OnlineWorldGameplay.Offer offer, int elapsed) {

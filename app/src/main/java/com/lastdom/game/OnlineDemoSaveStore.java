@@ -23,6 +23,17 @@ final class OnlineDemoSaveStore {
 
   static String encode(OnlineWorldGameplay.Data data) {
     String legacy = encodeLegacy(data);
+    if (data.civic.used) {
+      data.civic.validate(data.combat);
+      String body =
+          "3"
+              + legacy.substring(1)
+              + "|"
+              + OnlineCombatCodec.encode(data.combat)
+              + "|"
+              + OnlineCivicCodec.encode(data.civic);
+      return body + "|" + checksum(body);
+    }
     if (!data.combat.used) return legacy;
     String body = "2" + legacy.substring(1) + "|" + OnlineCombatCodec.encode(data.combat);
     return body + "|" + checksum(body);
@@ -50,7 +61,9 @@ final class OnlineDemoSaveStore {
     if (end < 0 || !checksum(text.substring(0, end)).equals(text.substring(end + 1)))
       throw new IllegalArgumentException("Combat save checksum mismatch");
     String[] parts = text.split("\\|", -1);
-    if (parts.length != 7) throw new IllegalArgumentException("Unknown combat save");
+    boolean civicVersion = parts[0].equals("3");
+    if (parts.length != (civicVersion ? 8 : 7))
+      throw new IllegalArgumentException("Unknown combat save");
     String[] amounts = parts[1].split(",", -1);
     if (amounts.length != OnlineInventory.Resource.values().length + 1)
       throw new IllegalArgumentException("Invalid balance count");
@@ -74,6 +87,9 @@ final class OnlineDemoSaveStore {
         || (!parts[3].isEmpty() && !parts[3].equals("pvp_frontier")))
       throw new IllegalArgumentException("Invalid demo reputation/consent");
     OnlineBattleRepository.State combat = OnlineCombatCodec.decode(parts[5]);
+    OnlineCivicState civic =
+        civicVersion ? OnlineCivicCodec.decode(parts[6]) : OnlineCivicState.initial();
+    civic.validate(combat);
     OnlineWorldGameplay.Data restored =
         new OnlineWorldGameplay.Data(
             new OnlineInventory(balances),
@@ -81,8 +97,9 @@ final class OnlineDemoSaveStore {
             operations,
             reputation,
             parts[3],
-            combat);
-    if (!combat.used || !encode(restored).equals(text))
+            combat,
+            civic);
+    if ((civicVersion ? !civic.used : !combat.used) || !encode(restored).equals(text))
       throw new IllegalArgumentException("Noncanonical combat save");
     return restored;
   }
@@ -90,7 +107,7 @@ final class OnlineDemoSaveStore {
   /** Replay the finite ledger to validate balances, reputation and exactly-once IDs together. */
   static OnlineWorldGameplay.Data decode(String text, MockOnlineWorldRepository repository) {
     if (text.isEmpty()) return OnlineWorldGameplay.Data.initial();
-    if (text.startsWith("2|")) return decodeCombat(text, repository);
+    if (text.startsWith("2|") || text.startsWith("3|")) return decodeCombat(text, repository);
     String[] parts = text.split("\\|", -1);
     if (parts.length != 5 || !parts[0].equals("1"))
       throw new IllegalArgumentException("Unknown demo save");

@@ -3,7 +3,8 @@ package com.lastdom.game;
 import java.util.*;
 
 /** World data and authoritative demo commands. No live network adapter is enabled. */
-interface OnlineWorldRepository extends OnlineBattleRepository {
+interface OnlineWorldRepository
+    extends OnlineBattleRepository, OnlineAllianceRepository, OnlineCityEventRepository {
   Snapshot load();
 
   default OnlineWorldGameplay.Data gameplay() {

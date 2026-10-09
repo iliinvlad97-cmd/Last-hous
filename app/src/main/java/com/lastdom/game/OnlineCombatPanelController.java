@@ -67,6 +67,10 @@ final class OnlineCombatPanelController {
   }
 
   void showReport(String id) {
+    if (world.state.gameplay.civic.operation(id) != null) {
+      world.civicPanel.showOperation(id);
+      return;
+    }
     reportId = id;
     OnlineBattleRepository.Battle battle = world.state.gameplay.combat.battle(id);
     confirming = false;
@@ -278,7 +282,7 @@ final class OnlineCombatPanelController {
           row(
               e.own.fighters.get(i).name + " · " + e.own.fighters.get(i).role,
               e.active() ? "Участвует в экспедиции" : "Потеря здоровья: " + e.healthLoss.get(i));
-        row("ОТРЯД СОЮЗНИКА", "2 виртуальных участника");
+        row("ОТРЯД СОЮЗНИКА", e.ally.fighters.size() + " виртуальных участника");
         for (int i = 0; i < e.ally.fighters.size(); i++)
           row(
               e.ally.fighters.get(i).name + " · " + e.ally.fighters.get(i).role,

@@ -12,6 +12,7 @@ final class OnlineWorldController {
 
   OnlineWorldState state;
   final OnlineCombatPanelController combatPanel = new OnlineCombatPanelController(this);
+  final OnlineCivicPanelController civicPanel = new OnlineCivicPanelController(this);
   private final OnlineWorldRepository repository;
   private final LongSupplier clock;
   private long previousNanos = Long.MIN_VALUE;
@@ -49,6 +50,7 @@ final class OnlineWorldController {
           i * 2);
     }
     state = replacement;
+    civicPanel.sync();
     previousNanos = Long.MIN_VALUE;
     changed();
   }
@@ -63,6 +65,7 @@ final class OnlineWorldController {
     previousNanos = Long.MIN_VALUE;
     syncGameplay();
     combatPanel.resumed();
+    civicPanel.sync();
     for (int i = 0; i < state.gameplay.operations.size(); i++)
       state.deliverySeconds[i] = state.gameplay.operations.get(i).elapsedSeconds;
   }
@@ -79,8 +82,19 @@ final class OnlineWorldController {
   }
 
   void advanceMinute() {
+    int completed = 0;
+    for (OnlineCoopOperation op : state.gameplay.civic.operations)
+      if (op.state == OnlineCoopOperation.State.COMPLETED) completed++;
     if (repository.advanceMinute()) {
       syncGameplay();
+      int now = 0;
+      for (OnlineCoopOperation op : state.gameplay.civic.operations)
+        if (op.state == OnlineCoopOperation.State.COMPLETED) now++;
+      if (now > completed) {
+        state.result = "Операция завершена. Отчёт доступен в событиях";
+        state.resultSuccess = true;
+        state.confirmationGlow = 1;
+      }
       panelRevision++;
     }
   }
@@ -97,6 +111,7 @@ final class OnlineWorldController {
           i * 2);
     }
     state.pvpEnabled = !state.gameplay.pvpZoneId.isEmpty();
+    civicPanel.sync();
   }
 
   void acceptResult(OnlineWorldGameplay.Result result) {
@@ -105,6 +120,60 @@ final class OnlineWorldController {
     state.resultSuccess = result.success;
     if (result.success) state.confirmationGlow = 1;
     panelRevision++;
+  }
+
+  OnlineWorldGameplay.Result activateCivic() {
+    OnlineWorldGameplay.Result r =
+        demoActionsAvailable()
+            ? repository.activateCivic()
+            : new OnlineWorldGameplay.Result(false, "Демо-сеть недоступна");
+    acceptResult(r);
+    return r;
+  }
+
+  OnlineWorldGameplay.Result createAlliance(String name) {
+    OnlineWorldGameplay.Result r =
+        demoActionsAvailable()
+            ? repository.createAlliance(name)
+            : new OnlineWorldGameplay.Result(false, "Союзы недоступны");
+    acceptResult(r);
+    return r;
+  }
+
+  OnlineWorldGameplay.Result invite(String id) {
+    OnlineWorldGameplay.Result r =
+        demoActionsAvailable()
+            ? repository.invite(id)
+            : new OnlineWorldGameplay.Result(false, "Приглашения недоступны");
+    acceptResult(r);
+    return r;
+  }
+
+  OnlineWorldGameplay.Result spawnEvent() {
+    OnlineWorldGameplay.Result r =
+        demoActionsAvailable()
+            ? repository.createDemoEvent()
+            : new OnlineWorldGameplay.Result(false, "События недоступны");
+    acceptResult(r);
+    return r;
+  }
+
+  OnlineWorldGameplay.Result startOperation(
+      String id, String event, java.util.List<String> fighters, java.util.List<String> allies) {
+    if (!demoActionsAvailable()
+        || state.panel != OnlineWorldState.Panel.OPERATION_PREP
+        || !civicPanel.confirming)
+      return new OnlineWorldGameplay.Result(false, "Требуется отдельное подтверждение");
+    OnlineWorldGameplay.Result r =
+        repository.startOperation(
+            id,
+            event,
+            new java.util.ArrayList<>(fighters),
+            new java.util.ArrayList<>(allies),
+            clock.getAsLong() ^ ((long) state.gameplay.combat.nextId * 0x9e3779b97f4a7c15L),
+            true);
+    acceptResult(r);
+    return r;
   }
 
   OnlineWorldGameplay.Result recover(String id) {
@@ -216,6 +285,7 @@ final class OnlineWorldController {
     if (seconds < 0 || seconds > .25) seconds = 0;
     state.animationSeconds += seconds;
     combatPanel.frame(seconds);
+    civicPanel.frame(seconds);
     float opacity = (float) (1 - Math.exp(-seconds / .12));
     float highlight = (float) (1 - Math.exp(-seconds / .18));
     float target = state.selected() ? 1 : 0;
@@ -242,6 +312,7 @@ final class OnlineWorldController {
     state.shelterId = state.zoneId = state.squadId = "";
     state.confirmingPvp = false;
     combatPanel.confirming = false;
+    civicPanel.confirming = false;
     state.panel = OnlineWorldState.Panel.OBJECT;
     state.offerId = state.deliveryId = state.result = "";
     state.cardOpacity = state.selectionStrength = 0;
@@ -270,6 +341,7 @@ final class OnlineWorldController {
   }
 
   TouchResult touch(int action, float x, float y, OnlineWorldGeometry g) {
+    if (civicPanel.active()) return civicPanel.touch(action, x, y, g);
     if (combatPanel.active()) return combatPanel.touch(action, x, y, g);
     boolean card = state.selected();
     if (action == android.view.MotionEvent.ACTION_CANCEL) {
@@ -381,12 +453,33 @@ final class OnlineWorldController {
         closeCard();
       return TouchResult.CONSUMED;
     }
+    if (y >= 60 && y <= 108) {
+      if (x >= 146 && x <= 266) civicPanel.section(OnlineWorldState.Panel.ALLIANCE);
+      else if (x >= 272 && x <= 400) civicPanel.section(OnlineWorldState.Panel.EVENTS);
+      return TouchResult.CONSUMED;
+    }
     if (x >= 20 && x <= 96 && y >= 12 && y <= 56) return TouchResult.BACK;
     if (x >= 300 && x <= 400 && y >= 12 && y <= 56) {
       openPanel(OnlineWorldState.Panel.INVENTORY);
       return TouchResult.CONSUMED;
     }
     if (!g.inMap(x, y)) return TouchResult.CONSUMED;
+    for (int index = state.gameplay.civic.events.size() - 1; index >= 0; index--) {
+      OnlineCityEvent event = state.gameplay.civic.events.get(index);
+      if (event.state != OnlineCityEvent.State.AVAILABLE
+          && event.state != OnlineCityEvent.State.ACTIVE) continue;
+      float dx = x - g.x(event.x()), dy = y - g.y(event.y());
+      if (dx * dx + dy * dy > 18 * 18) continue;
+      boolean nearest = true;
+      for (OnlineShelter shelter : state.shelters) {
+        float sx = x - g.x(shelter.position.x), sy = y - g.y(shelter.position.y);
+        if (sx * sx + sy * sy < dx * dx + dy * dy) nearest = false;
+      }
+      if (nearest) {
+        civicPanel.showEvent(event.id);
+        return TouchResult.CONSUMED;
+      }
+    }
     for (OnlineShelter shelter : state.shelters)
       if (g.hits(x, y, shelter.position.x, shelter.position.y)) {
         select(shelter.id, "", "");

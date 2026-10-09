@@ -132,6 +132,7 @@ final class OnlineWorldGameplay {
     final int reputation;
     final String pvpZoneId;
     final OnlineBattleRepository.State combat;
+    final OnlineCivicState civic;
 
     Data(
         OnlineInventory inventory,
@@ -155,6 +156,19 @@ final class OnlineWorldGameplay {
         int reputation,
         String pvpZoneId,
         OnlineBattleRepository.State combat) {
+      this(
+          inventory, offers, operations, reputation, pvpZoneId, combat, OnlineCivicState.initial());
+    }
+
+    Data(
+        OnlineInventory inventory,
+        List<Offer> offers,
+        List<Operation> operations,
+        int reputation,
+        String pvpZoneId,
+        OnlineBattleRepository.State combat,
+        OnlineCivicState civic) {
+      this.civic = Objects.requireNonNull(civic);
       this.combat = Objects.requireNonNull(combat);
       Set<String> ids = new HashSet<>(), operationsIds = new HashSet<>();
       for (Offer offer : offers)
@@ -168,6 +182,10 @@ final class OnlineWorldGameplay {
       this.operations = Collections.unmodifiableList(new ArrayList<>(operations));
       this.reputation = reputation;
       this.pvpZoneId = pvpZoneId;
+    }
+
+    Data withCivic(OnlineCivicState replacement) {
+      return new Data(inventory, offers, operations, reputation, pvpZoneId, combat, replacement);
     }
 
     static Data initial() {

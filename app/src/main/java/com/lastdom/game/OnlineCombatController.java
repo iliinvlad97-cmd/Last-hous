@@ -23,7 +23,13 @@ final class OnlineCombatController {
       OnlineInventory inventory,
       OnlineBattleRepository.State state) {
     return new OnlineWorldGameplay.Data(
-        inventory, data.offers, data.operations, data.reputation, data.pvpZoneId, state);
+        inventory,
+        data.offers,
+        data.operations,
+        data.reputation,
+        data.pvpZoneId,
+        state,
+        data.civic);
   }
 
   private String request(OnlineWorldGameplay.Data data, String id, boolean consent) {
@@ -77,7 +83,7 @@ final class OnlineCombatController {
             data.combat.fighters, battles, data.combat.expeditions, data.combat.nextId + 1, true);
     return new Change(
         new OnlineWorldGameplay.Data(
-            data.inventory, data.offers, data.operations, data.reputation, zone, state),
+            data.inventory, data.offers, data.operations, data.reputation, zone, state, data.civic),
         true,
         "Демо-бой начался. Результат зафиксирован.");
   }

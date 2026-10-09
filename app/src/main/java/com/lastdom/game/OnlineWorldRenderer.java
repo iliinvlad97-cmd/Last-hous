@@ -10,6 +10,7 @@ final class OnlineWorldRenderer {
   private final Path path = new Path();
   private final OnlineWorldPanelRenderer panel;
   private final OnlineCombatRenderer combatRenderer;
+  private final OnlineCivicRenderer civicRenderer;
   private final Map<String, String> labels = new HashMap<>();
   private Bitmap backdrop;
   private RectF backdropBounds;
@@ -21,6 +22,7 @@ final class OnlineWorldRenderer {
     this.view = view;
     panel = new OnlineWorldPanelRenderer(view);
     combatRenderer = new OnlineCombatRenderer(view);
+    civicRenderer = new OnlineCivicRenderer(view);
   }
 
   // An artist can replace only the backdrop. All normalized objects and hitboxes stay unchanged.
@@ -95,6 +97,7 @@ final class OnlineWorldRenderer {
           Paint.Style.STROKE,
           1.5f);
     }
+    drawCityEvents(c, g, state);
     for (int i = 0; i < state.shelters.size(); i++)
       drawShelter(c, g, state.shelters.get(i), i, state);
     for (int i = 0; i < state.squads.size(); i++) drawSquad(c, g, i, state);
@@ -105,7 +108,8 @@ final class OnlineWorldRenderer {
       view.box(c, 18, 108, 402, 112, alpha(view.good, (int) (state.confirmationGlow * 200)), 2);
     view.hudRenderer.drawNav(c);
     if (state.selected()) {
-      if (view.onlineWorld.combatPanel.active()) combatRenderer.draw(c, g);
+      if (view.onlineWorld.civicPanel.active()) civicRenderer.draw(c, g);
+      else if (view.onlineWorld.combatPanel.active()) combatRenderer.draw(c, g);
       else panel.draw(c, g);
     }
   }
@@ -113,22 +117,85 @@ final class OnlineWorldRenderer {
   private void drawHeader(Canvas c, OnlineWorldState state) {
     view.box(c, 20, 12, 96, 56, view.panel2, 9);
     view.bold(c, "‹ КАРТА", 30, 39, 11, view.text);
-    view.bold(c, "ONLINE 0.3.1", 112, 29, 18, view.text);
-    view.txt(c, "РАДИОСЕТЬ", 113, 49, 10, view.muted);
-    view.box(c, 300, 12, 400, 56, Color.rgb(58, 44, 29), 9);
-    view.bold(c, "ЗАПАСЫ", 308, 39, 11, view.accent);
-    view.bold(c, state.connection.description, 20, 76, 12, view.accent);
-    view.txt(c, "БЕЗОПАСНО", 20, 98, 10, view.good);
-    view.txt(c, "PvE", 155, 98, 10, view.accent);
+    view.bold(c, "ONLINE 0.4", 112, 29, 18, view.text);
     view.txt(
         c,
-        state.gameplay.combat.battles.stream().anyMatch(b -> b.active())
-            ? "PvP: ДЕМО-БОЙ"
-            : state.pvpEnabled ? "PvP: ДЕМО-ВКЛ" : "PvP: ВЫКЛ",
-        244,
-        98,
-        10,
-        state.pvpEnabled ? view.danger : view.muted);
+        state.confirmationGlow > .01f && state.result.startsWith("Операция завершена")
+            ? "ОПЕРАЦИЯ ЗАВЕРШЕНА"
+            : state.connection == OnlineWorldState.Connection.DEMO
+                ? "ДЕМО-РЕЖИМ"
+                : state.connection.description,
+        112,
+        49,
+        9,
+        view.accent);
+    view.box(c, 300, 12, 400, 56, Color.rgb(58, 44, 29), 9);
+    view.bold(c, "ЗАПАСЫ", 308, 39, 11, view.accent);
+    tab(c, 20, 140, "КАРТА", !view.onlineWorld.civicPanel.active());
+    tab(
+        c,
+        146,
+        266,
+        "СОЮЗ",
+        state.panel == OnlineWorldState.Panel.ALLIANCE
+            || state.panel == OnlineWorldState.Panel.ALLIANCE_NAME);
+    tab(
+        c,
+        272,
+        400,
+        "СОБЫТИЯ",
+        view.onlineWorld.civicPanel.active()
+            && state.panel != OnlineWorldState.Panel.ALLIANCE
+            && state.panel != OnlineWorldState.Panel.ALLIANCE_NAME);
+  }
+
+  private void tab(Canvas c, float left, float right, String label, boolean selected) {
+    view.box(c, left, 60, right, 108, selected ? Color.rgb(61, 46, 30) : view.panel2, 8);
+    view.bold(c, label, left + 18, 90, 11, selected ? view.accent : view.muted);
+  }
+
+  private void drawCityEvents(Canvas c, OnlineWorldGeometry g, OnlineWorldState state) {
+    for (OnlineCivicPanelController.Motion motion : view.onlineWorld.civicPanel.routes.values()) {
+      shape(c, g, motion.route.shape, false);
+      style(alpha(view.good, 170), Paint.Style.STROKE, 2);
+      c.drawPath(path, paint);
+      circle(
+          c, g.x(motion.position[0]), g.y(motion.position[1]), 5, view.good, Paint.Style.FILL, 0);
+    }
+    for (int i = state.gameplay.civic.events.size() - 1; i >= 0; i--) {
+      OnlineCityEvent e = state.gameplay.civic.events.get(i);
+      if (e.state != OnlineCityEvent.State.AVAILABLE && e.state != OnlineCityEvent.State.ACTIVE)
+        continue;
+      boolean newer = false;
+      for (int j = i + 1; j < state.gameplay.civic.events.size(); j++) {
+        OnlineCityEvent other = state.gameplay.civic.events.get(j);
+        if (other.type.zoneId.equals(e.type.zoneId)
+            && (other.state == OnlineCityEvent.State.AVAILABLE
+                || other.state == OnlineCityEvent.State.ACTIVE)) newer = true;
+      }
+      if (newer) continue;
+      int count = 0;
+      for (OnlineCityEvent other : state.gameplay.civic.events)
+        if (other.type.zoneId.equals(e.type.zoneId)
+            && (other.state == OnlineCityEvent.State.AVAILABLE
+                || other.state == OnlineCityEvent.State.ACTIVE)) count++;
+      float x = g.x(e.x()), y = g.y(e.y());
+      int color = e.type.zoneId.equals("pve_industry") ? view.accent : view.danger;
+      float pulse = (float) (.5 + .5 * Math.sin(state.animationSeconds * 2.2));
+      circle(c, x, y, 14 + 3 * pulse, alpha(color, 45 + (int) (45 * pulse)), Paint.Style.FILL, 0);
+      circle(c, x, y, 10, color, Paint.Style.STROKE, 2);
+      view.bold(c, "!", x - 2, y + 4, 12, color);
+      center(
+          c,
+          e.state == OnlineCityEvent.State.ACTIVE
+              ? "ОПЕРАЦИЯ"
+              : Math.max(0, e.expiresMinute - state.gameplay.civic.minute) + " мин.",
+          x,
+          y + 26,
+          9,
+          color);
+      if (count > 1) center(c, count + " события · список", x, y + 38, 8, view.muted);
+    }
   }
 
   private void drawBackdrop(
@@ -236,6 +303,11 @@ final class OnlineWorldRenderer {
   private void drawShelter(
       Canvas c, OnlineWorldGeometry g, OnlineShelter shelter, int index, OnlineWorldState state) {
     float x = g.x(shelter.position.x), y = g.y(shelter.position.y);
+    if (state.gameplay.civic.alliance != null) {
+      OnlineAllianceMember member = state.gameplay.civic.alliance.member(shelter.id);
+      if (member != null && member.invitation == OnlineAllianceMember.Invitation.ACCEPTED)
+        circle(c, x, y, 26, alpha(view.good, 170), Paint.Style.STROKE, 2);
+    }
     boolean selected = shelter.id.equals(state.shelterId);
     float pulse = (float) (.5 + .5 * Math.sin(state.animationSeconds * 2 + index));
     circle(
