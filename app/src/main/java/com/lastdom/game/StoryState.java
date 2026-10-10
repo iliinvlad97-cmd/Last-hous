@@ -17,6 +17,8 @@ final class StoryState {
   String investigationDecision = "";
   boolean entranceInspected;
 
+  final StoryFactionState factions = new StoryFactionState();
+
   int voicesStage, evaTrust = StoryDialogue.INITIAL_TRUST;
   final Map<String, Integer> dialogueSteps = new LinkedHashMap<>(),
       attitudes = new LinkedHashMap<>();
@@ -43,6 +45,7 @@ final class StoryState {
   final Map<String, Boolean> attemptResults = new LinkedHashMap<>();
 
   void reset() {
+    factions.reset();
     investigation = StoryInvestigationController.Phase.DORMANT;
     investigationDecision = "";
     entranceInspected = false;

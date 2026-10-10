@@ -95,10 +95,10 @@ public class RegressionProbe {
    }
    draw(v);float progress=v.cityMap.displayProgress;
    Canvas route=new Canvas();v.expeditionRenderer.drawRoute(route,m);
-   float[] center=marker(route),point=ExpeditionConfig.point(g.cityLocations.get(0),v.cityMap.displayProgress);
+   float[] center=marker(route),point=CityRoutePlanner.point(v.cityMap.routes.route(g.cityLocations.get(0),v.cityMap.visibleLocations(),m),v.cityMap.displayProgress,m.bottom-m.top);
    close(center[0],m.x(point[0])*v.scale,"marker X matches map transform");close(center[1],m.y(point[1])*v.scale,"marker Y matches map transform");
    require(v.cityMap.displayProgress>progress&&v.cityMap.displayProgress<e.progress(),"visual movement interpolated");
-   float[] touchPoint=ExpeditionConfig.point(g.cityLocations.get(0),v.cityMap.displayProgress);
+   float[] touchPoint=CityRoutePlanner.point(v.cityMap.routes.route(g.cityLocations.get(0),v.cityMap.visibleLocations(),m),v.cityMap.displayProgress,m.bottom-m.top);
    tap(v,m.x(touchPoint[0]),m.y(touchPoint[1]));require(v.cityMap.expeditionPanel,"moving marker opens panel");tap(v,210,m.panelBottom-40);
    g.paused=true;float pausedProgress=v.cityMap.displayProgress;int elapsed=e.elapsedMinutes();
    for(int i=0;i<5;i++){v.tick.run();draw(v);}

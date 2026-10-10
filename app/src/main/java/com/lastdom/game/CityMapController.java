@@ -88,11 +88,13 @@ final class CityMapController {
     points.addAll(ExplorationConfig.destinations());
     points.add(StoryConfig.location());
     points.addAll(StoryInvestigationConfig.locations());
+    points.addAll(StoryFactionConfig.locations());
     return Collections.unmodifiableList(points);
   }
 
   final List<MapLocation> locations;
   private final GameController game;
+  final CityRouteCache routes = new CityRouteCache();
 
   CityMapController(GameController game) {
     this.game = game;
@@ -212,6 +214,8 @@ final class CityMapController {
       for (MapLocation point : game.cityLocations)
         if (StoryInvestigationConfig.target(point.id)
             && game.storyController.investigation.visible(point.id)) visible.add(point);
+      for (MapLocation point : game.cityLocations)
+        if (game.storyController.factions.visible(point.id)) visible.add(point);
     } else {
       CityDistrict d = game.explorationController.district(districtFilterId);
       if (d != null && d.state == CityDistrict.State.EXPLORED)
@@ -496,7 +500,9 @@ final class CityMapController {
       if (route == null) continue;
       MapLocation target = game.expeditionController.location(route.locationId);
       float progress = type == Expedition.Type.RECON ? reconDisplayProgress : displayProgress;
-      float[] point = ExpeditionConfig.point(target, progress);
+      float[][] routePoints = routes.route(target, visibleLocations(), layout);
+      float[] point = CityRoutePlanner.point(routePoints, progress, layout.bottom - layout.top);
+      if (point == null) continue;
       if (layout.hits(x, y, point[0], point[1])) {
         openExpedition(route);
         return TouchResult.CONSUMED;

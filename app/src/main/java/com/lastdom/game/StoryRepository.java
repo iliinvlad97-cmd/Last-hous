@@ -8,7 +8,7 @@ final class StoryRepository {
   static final String P = "story1_";
 
   static void save(StoryState s, SharedPreferences.Editor e) {
-    e.putInt(P + "schema", 3)
+    e.putInt(P + "schema", 4)
         .putString(P + "phase", s.phase.name())
         .putString(P + "chapter", s.chapterId)
         .putString(P + "quest", s.questId)
@@ -22,6 +22,7 @@ final class StoryRepository {
     e.putString(P + "investigation", s.investigation.name())
         .putString(P + "investigationDecision", s.investigationDecision)
         .putBoolean(P + "entranceInspected", s.entranceInspected);
+    StoryFactionRepository.save(s.factions, e);
     put(e, "flags", s.flags);
     put(e, "objectives", s.objectives);
     put(e, "items", s.items);
@@ -63,6 +64,7 @@ final class StoryRepository {
       s.reset();
       return;
     }
+    StoryFactionRepository.load(s.factions, p);
     s.chapterId = p.getString(P + "chapter", "chapter.last_signal");
     s.questId = p.getString(P + "quest", "");
     s.specialistId = p.getString(P + "specialist", "");

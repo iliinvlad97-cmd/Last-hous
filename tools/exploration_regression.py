@@ -23,7 +23,7 @@ PROBE = raids.PROBE[:raids.PROBE.index(' static void frequency()')] + r'''
  static void fail(GameView v,String district,List<String> ids,String label){String before=snapshot(v);require(!v.game.explorationController.start(district,ids).isEmpty(),label);require(before.equals(snapshot(v)),"failed recon atomic: "+label);}
  static void openChain(GameView v,String until){for(CityDistrict d:v.game.cityDistricts){if(d.config.id.equals(until)){d.state=CityDistrict.State.DISCOVERED;break;}d.state=CityDistrict.State.EXPLORED;}}
  static void defaults(){
-  GameView v=fresh();require(v.game.cityDistricts.size()==4&&v.game.cityLocations.size()==22,"four districts/eight extra points plus four locked story points, same destination list");
+  GameView v=fresh();require(v.game.cityDistricts.size()==4&&v.game.cityLocations.size()==25,"four districts/eight extra points plus seven locked story points, same destination list");
   require(v.cityMap.visibleLocations().size()==6&&v.cityMap.locations.size()==6,"initial map preserves its original six markers");
   for(int i=0;i<6;i++){MapLocation p=v.game.cityLocations.get(i);require(p.isLocked()==(i>=4),"original availability "+p.id);require(p.lootTable.max(ExpeditionLoot.Resource.FOOD)==(i==0?20:0),"original loot table "+p.id);}
   Set<String> all=new HashSet<>();for(MapLocation p:v.game.cityLocations){require(all.add(p.id),"unique map IDs");require(p.mapX>0&&p.mapX<1&&p.mapY>0&&p.mapY<1,"normalized route endpoint");if(p.kind==MapLocation.Kind.DISTRICT)require(p.lootTable.max(ExpeditionLoot.Resource.WATER)==0,"recon never rolls water loot");}

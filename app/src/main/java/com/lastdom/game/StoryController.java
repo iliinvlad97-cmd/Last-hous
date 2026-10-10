@@ -6,11 +6,13 @@ final class StoryController {
   final StoryState state;
   boolean prompt;
   final StoryInvestigationController investigation;
+  final StoryFactionController factions;
 
   StoryController(GameController game) {
     this.game = game;
     state = game.story;
     investigation = new StoryInvestigationController(this);
+    factions = new StoryFactionController(this);
   }
 
   boolean busy(Resident r) {
@@ -28,6 +30,7 @@ final class StoryController {
     prompt = false;
     syncMap();
     investigation.syncMap();
+    factions.syncMap();
   }
 
   void restore() {
@@ -41,6 +44,7 @@ final class StoryController {
     }
     activateVoices();
     investigation.activate();
+    factions.activate();
     prompt = !state.pendingMessage.isEmpty();
   }
 
@@ -62,6 +66,7 @@ final class StoryController {
   void advanceMinute() {
     startVoices();
     investigation.advanceMinute();
+    factions.advanceMinute();
     if (state.phase == StoryState.Phase.DORMANT
         && game.day >= StoryConfig.START_DAY
         && generatorAvailable()
@@ -266,6 +271,7 @@ final class StoryController {
                 + " дальнейшие сведения.");
       }
       investigation.dialogueComplete(d);
+      factions.dialogueComplete(d);
       if (d == StoryDialogue.HOOK) investigation.start();
       if (next != null) message(next.event);
       else prompt = !state.pendingMessage.isEmpty();
@@ -276,6 +282,10 @@ final class StoryController {
   }
 
   void research(Expedition e, boolean early) {
+    if (StoryFactionConfig.target(e.locationId) != null) {
+      factions.research(e, early);
+      return;
+    }
     if (StoryInvestigationConfig.target(e.locationId)) {
       investigation.research(e, early);
       return;
@@ -290,6 +300,7 @@ final class StoryController {
   }
 
   String expeditionReason(String id) {
+    if (StoryFactionConfig.target(id) != null) return factions.reason(id);
     if (StoryInvestigationConfig.target(id)) return investigation.reason(id);
     if (!state.flags.contains(StoryFlags.SIGNAL)) return "Сигнал ещё не получен";
     if (state.items.contains(StoryConfig.CARRIER))

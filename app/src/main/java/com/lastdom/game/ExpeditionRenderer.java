@@ -8,6 +8,9 @@ import android.graphics.Path;
 final class ExpeditionRenderer {
   private final GameView view;
   private final Paint paint = new Paint(3);
+  private final Path[] routePaths = new Path[2];
+  private final float[][][] pathPoints = new float[2][][];
+  private final float[] pathScale = new float[2];
   private final Expedition[] displayed = new Expedition[2];
   private final Expedition.State[] displayedState = new Expedition.State[2];
 
@@ -55,23 +58,31 @@ final class ExpeditionRenderer {
     }
     if (recon) view.cityMap.reconDisplayProgress = progress;
     else view.cityMap.displayProgress = progress;
-    float[][] points = ExpeditionConfig.route(target);
-    Path path = new Path();
-    path.moveTo(view.sy(layout.x(points[0][0])), view.sy(layout.y(points[0][1])));
-    for (int i = 1; i < points.length; i++)
-      path.lineTo(view.sy(layout.x(points[i][0])), view.sy(layout.y(points[i][1])));
-    paint.setStyle(Paint.Style.STROKE);
-    paint.setStrokeWidth(view.sy(2));
-    paint.setColor(color);
-    c.drawPath(path, paint);
-    paint.setStyle(Paint.Style.FILL);
-    float[] point = ExpeditionConfig.point(target, progress);
-    float x = layout.x(point[0]), y = layout.y(point[1]);
-    paint.setColor(view.bg);
-    c.drawCircle(view.sy(x), view.sy(y), view.sy(14), paint);
-    paint.setColor(color);
-    c.drawCircle(view.sy(x), view.sy(y), view.sy(10), paint);
-    view.bold(c, recon ? "Р" : "О", x - 4, y + 4, 11, view.bg);
+    float[][] points = view.cityMap.routes.route(target, view.cityMap.visibleLocations(), layout);
+    if (points.length > 0) {
+      if (pathPoints[index] != points || pathScale[index] != view.scale) {
+        pathPoints[index] = points;
+        pathScale[index] = view.scale;
+        Path path = new Path();
+        path.moveTo(view.sy(layout.x(points[0][0])), view.sy(layout.y(points[0][1])));
+        for (int i = 1; i < points.length; i++)
+          path.lineTo(view.sy(layout.x(points[i][0])), view.sy(layout.y(points[i][1])));
+        routePaths[index] = path;
+      }
+      paint.setStyle(Paint.Style.STROKE);
+      paint.setStrokeWidth(view.sy(2));
+      paint.setStrokeCap(Paint.Cap.ROUND);
+      paint.setColor(color);
+      c.drawPath(routePaths[index], paint);
+      paint.setStyle(Paint.Style.FILL);
+      float[] point = CityRoutePlanner.point(points, progress, layout.bottom - layout.top);
+      float x = layout.x(point[0]), y = layout.y(point[1]);
+      paint.setColor(view.bg);
+      c.drawCircle(view.sy(x), view.sy(y), view.sy(14), paint);
+      paint.setColor(color);
+      c.drawCircle(view.sy(x), view.sy(y), view.sy(10), paint);
+      view.bold(c, recon ? "Р" : "О", x - 4, y + 4, 11, view.bg);
+    }
     view.box(c, left, row, right, row + 28, view.panel2, 8);
     String label =
         recon
@@ -81,6 +92,7 @@ final class ExpeditionRenderer {
             : (expedition.state() == Expedition.State.EXPLORING
                 ? "Отряд прибыл • Исследование"
                 : expedition.phaseLabel());
+    if (points.length == 0) label = "Подход не построен";
     String progressText =
         Math.round(expedition.progress() * 100) + "% • " + expedition.remainingMinutes() + " мин.";
     if (parallel) {
@@ -125,14 +137,32 @@ final class ExpeditionRenderer {
     lines.add("Статус: " + expedition.phaseLabel());
     if (target.kind == MapLocation.Kind.STORY) {
       Boolean recovered = view.game.story.attemptResults.get(expedition.id);
-      lines.add(
-          recovered == null
-              ? "Сюжетная цель: найти носитель данных"
-              : recovered
-                  ? "Носитель найден; доставка — после возвращения"
-                  : "Носитель не найден. После возвращения можно повторить попытку");
-      if (expedition.state() == Expedition.State.COMPLETED && Boolean.TRUE.equals(recovered))
-        lines.add("Носитель доставлен. Расшифровка: Журнал → Сюжет");
+      StoryFaction faction = StoryFactionConfig.target(target.id);
+      if (faction != null) {
+        lines.add("Задание: " + faction.quest.name);
+        lines.add(
+            recovered == null
+                ? faction.quest.objectives.get(0).text
+                : recovered
+                    ? "Сюжетная цель достигнута; итог — после возвращения"
+                    : "Цель не достигнута. После возвращения можно повторить попытку");
+        if (expedition.state() == Expedition.State.COMPLETED && Boolean.TRUE.equals(recovered))
+          lines.add(
+              view.game.story.factions.completed.contains(faction.id)
+                  ? "Задание выполнено. Отношения +15 учтены один раз; подробности: Журнал → Сюжет"
+                      + " → Фракции"
+                  : "Маршрут проверен. Передайте 2 еды и 2 воды: Журнал → Сюжет → Фракции");
+      } else {
+
+        lines.add(
+            recovered == null
+                ? "Сюжетная цель: найти носитель данных"
+                : recovered
+                    ? "Носитель найден; доставка — после возвращения"
+                    : "Носитель не найден. После возвращения можно повторить попытку");
+        if (expedition.state() == Expedition.State.COMPLETED && Boolean.TRUE.equals(recovered))
+          lines.add("Носитель доставлен. Расшифровка: Журнал → Сюжет");
+      }
     }
     if (results) {
       lines.add("НАЙДЕНО / ВЗЯТО С СОБОЙ");

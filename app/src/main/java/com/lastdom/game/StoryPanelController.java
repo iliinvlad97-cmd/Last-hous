@@ -10,6 +10,7 @@ final class StoryPanelController {
     MESSAGE,
     SPECIALIST,
     CHOICE,
+    FACTION_CHOICE,
     INVESTIGATION_CHOICE
   }
 
@@ -62,6 +63,7 @@ final class StoryPanelController {
   void showJournal() {
     view.game.storyController.activateVoices();
     view.game.storyController.investigation.activate();
+    view.game.storyController.factions.activate();
     open = true;
     mode = Mode.JOURNAL;
     scroll = 0;
@@ -88,17 +90,19 @@ final class StoryPanelController {
   }
 
   boolean choiceMode() {
-    return mode == Mode.CHOICE || mode == Mode.INVESTIGATION_CHOICE;
+    return mode == Mode.CHOICE || mode == Mode.INVESTIGATION_CHOICE || mode == Mode.FACTION_CHOICE;
   }
 
   String title() {
-    return mode == Mode.MESSAGE
-        ? "РАДИОПЕРЕГОВОРЫ"
-        : mode == Mode.SPECIALIST
-            ? "РАСШИФРОВКА"
-            : mode == Mode.INVESTIGATION_CHOICE
-                ? "СУДЬБА ДОКУМЕНТОВ"
-                : mode == Mode.CHOICE ? "СУДЬБА КООРДИНАТ" : "СЮЖЕТ · ПОСЛЕДНИЙ СИГНАЛ";
+    return mode == Mode.FACTION_CHOICE
+        ? "ИНФОРМАЦИЯ О ВХОДЕ"
+        : mode == Mode.MESSAGE
+            ? "РАДИОПЕРЕГОВОРЫ"
+            : mode == Mode.SPECIALIST
+                ? "РАСШИФРОВКА"
+                : mode == Mode.INVESTIGATION_CHOICE
+                    ? "СУДЬБА ДОКУМЕНТОВ"
+                    : mode == Mode.CHOICE ? "СУДЬБА КООРДИНАТ" : "СЮЖЕТ · ПОСЛЕДНИЙ СИГНАЛ";
   }
 
   void row(String text) {
@@ -160,6 +164,20 @@ final class StoryPanelController {
                 r.id,
                 reason.isEmpty()));
       }
+    } else if (mode == Mode.FACTION_CHOICE) {
+      row(
+          "Кому вы готовы доверить информацию о подземном входе? Любой выбор позволяет продолжить"
+              + " кампанию.");
+      for (String id :
+          new String[] {
+            StoryFactionConfig.UNION,
+            StoryFactionConfig.GARRISON,
+            StoryFactionConfig.HEIRS,
+            StoryFactionConfig.NONE
+          })
+        rows.add(
+            new Row(
+                (choiceId.equals(id) ? "✓ " : "") + StoryFactionConfig.sideLabel(id), id, true));
     } else if (mode == Mode.INVESTIGATION_CHOICE) {
       row(
           "Гермодверь остаётся закрытой. Решение о документах не заменяет ваш первый выбор; оба"
@@ -184,6 +202,7 @@ final class StoryPanelController {
       for (StoryChoice choice : new StoryChoice[] {StoryConfig.SHARE, StoryConfig.SECRET})
         rows.add(new Row((choiceId.equals(choice.id) ? "✓ " : "") + choice.label, choice.id, true));
     } else {
+      factionRows();
       if (s.investigation != StoryInvestigationController.Phase.DORMANT) {
         row("Глава 2 · СЛЕДЫ ПРОШЛОГО");
         row(view.game.storyController.investigation.objective());
@@ -296,7 +315,77 @@ final class StoryPanelController {
     revision++;
   }
 
+  void factionRows() {
+    StoryFactionState s = view.game.story.factions;
+    if (!s.started) return;
+    row("ГОРОД РАСКОЛОТ · ФРАКЦИИ");
+    row(
+        view.game.story.flags.contains("faction.city_divided.complete")
+            ? "Статус: выполнено"
+            : "Статус: выполняется");
+    row(
+        s.side.isEmpty()
+            ? "Познакомьтесь с тремя представителями и решите, кому доверить сведения."
+            : "Информация доверена: " + StoryFactionConfig.sideLabel(s.side));
+    if (view.game.storyController.factions.canChoose())
+      rows.add(new Row("ВЫБРАТЬ СТОРОНУ", "faction.choose", true));
+    for (StoryFaction f : StoryFactionConfig.ALL) {
+      int rep = s.reputation.getOrDefault(f.id, 0);
+      row(f.name + " · " + rep + " / 100 · " + StoryFactionConfig.tier(rep));
+      row(f.description);
+      rows.add(new Row("РАЗГОВОР · " + f.representative, f.contact.event.id, true));
+      row(
+          f.quest.name
+              + " · "
+              + (s.completed.contains(f.id)
+                  ? "Выполнено"
+                  : s.contacts.contains(f.id) ? "Доступно" : "Сначала установите контакт"));
+      row(f.quest.objectives.get(0).text);
+      if (s.contacts.contains(f.id) && !s.completed.contains(f.id))
+        rows.add(new Row("К МЕСТУ ЗАДАНИЯ", "faction.map." + f.id, true));
+    }
+    if (s.supplied.contains(StoryFactionConfig.UNION)
+        && !s.completed.contains(StoryFactionConfig.UNION)) {
+      row(view.game.storyController.factions.deliveryReason());
+      rows.add(new Row("ПЕРЕДАТЬ 2 ЕДЫ И 2 ВОДЫ", "faction.deliver", true));
+    }
+    if (view.game.story.items.contains("faction.lost_protocol"))
+      row("Найдено: утерянный технический протокол (1)");
+    row("ИСТОРИЯ ОТНОШЕНИЙ");
+    for (String line : s.history) row(line);
+  }
+
+  void journalAction(String id) {
+    if (id.equals("faction.choose")) {
+      mode = Mode.FACTION_CHOICE;
+      choiceId = "";
+      scroll = 0;
+      refresh();
+    } else if (id.equals("faction.deliver")) {
+      result = view.game.storyController.factions.deliver(true);
+      refresh();
+    } else if (id.startsWith("faction.map.")) {
+      StoryFaction f = StoryFactionConfig.faction(id.substring(12));
+      if (f != null) {
+        view.cityMap.closeSelection();
+        view.cityMap.districtsLayer = false;
+        view.cityMap.districtFilterId = "";
+        view.cityMap.focusedLocationId = f.locationId;
+        view.game.screen = GameView.CITY_MAP;
+        view.game.overlay = 0;
+        close();
+      }
+    } else showMessage(id);
+  }
+
   String primary() {
+    if (mode == Mode.FACTION_CHOICE) return "ПОДТВЕРДИТЬ РЕШЕНИЕ";
+    if (mode == Mode.JOURNAL
+        && view.game.story.factions.started
+        && view.game.story.pendingMessage.isEmpty())
+      return view.game.storyController.factions.canChoose()
+          ? "ВЫБРАТЬ СТОРОНУ"
+          : "ПРОДОЛЖИТЬ ВЫЖИВАНИЕ";
     if (mode == Mode.MESSAGE)
       return view.game.story.completedDialogues.contains(messageId)
           ? "К СЮЖЕТНОМУ ЖУРНАЛУ"
@@ -322,6 +411,8 @@ final class StoryPanelController {
   }
 
   boolean primaryEnabled() {
+    if (mode == Mode.FACTION_CHOICE)
+      return !choiceId.isEmpty() && view.game.storyController.factions.canChoose();
     if (mode == Mode.INVESTIGATION_CHOICE)
       return !choiceId.isEmpty()
           && view.game.story.investigation == StoryInvestigationController.Phase.DECISION
@@ -348,6 +439,19 @@ final class StoryPanelController {
   }
 
   void primaryAction() {
+    if (mode == Mode.FACTION_CHOICE) {
+      result = view.game.storyController.factions.choose(choiceId, true);
+      if (result.isEmpty()) showJournal();
+      else refresh();
+      return;
+    }
+    if (mode == Mode.JOURNAL
+        && view.game.story.factions.started
+        && view.game.story.pendingMessage.isEmpty()) {
+      if (view.game.storyController.factions.canChoose()) journalAction("faction.choose");
+      else close();
+      return;
+    }
     if (mode == Mode.INVESTIGATION_CHOICE) {
       result = view.game.storyController.investigation.choose(choiceId, true);
       if (result.isEmpty()) {
@@ -478,8 +582,8 @@ final class StoryPanelController {
       if (mode == Mode.MESSAGE) {
         response = Integer.parseInt(row.id);
         refresh();
-      } else if (mode == Mode.JOURNAL) showMessage(row.id);
-      else if (mode == Mode.CHOICE || mode == Mode.INVESTIGATION_CHOICE) {
+      } else if (mode == Mode.JOURNAL) journalAction(row.id);
+      else if (choiceMode()) {
         choiceId = row.id;
         refresh();
       } else if (mode == Mode.SPECIALIST) {

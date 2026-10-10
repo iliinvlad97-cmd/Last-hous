@@ -17,16 +17,8 @@ final class CityMapRenderer {
   private static final int MUTED = Color.rgb(135, 156, 168);
   private static final int WARM = Color.rgb(226, 157, 84);
   private static final int SAFE = Color.rgb(119, 181, 152);
-  private static final float[][] BLOCKS = {
-    {.04f, .03f, .10f, .12f}, {.43f, .03f, .12f, .10f}, {.86f, .03f, .10f, .14f},
-    {.08f, .20f, .12f, .09f}, {.34f, .19f, .11f, .10f}, {.60f, .20f, .13f, .10f},
-    {.82f, .23f, .12f, .10f}, {.04f, .33f, .10f, .14f}, {.32f, .34f, .09f, .13f},
-    {.55f, .34f, .10f, .12f}, {.86f, .39f, .10f, .11f}, {.05f, .51f, .11f, .10f},
-    {.25f, .50f, .11f, .09f}, {.52f, .50f, .12f, .09f}, {.76f, .51f, .16f, .08f},
-    {.04f, .69f, .10f, .11f}, {.33f, .69f, .09f, .09f}, {.76f, .70f, .10f, .12f},
-    {.18f, .84f, .13f, .10f}, {.66f, .86f, .13f, .08f}, {.86f, .86f, .10f, .08f}
-  };
   private final GameView view;
+  private String activeLoot = "", activeRecon = "";
   private final Paint paint = new Paint(3);
 
   CityMapRenderer(GameView view) {
@@ -35,18 +27,23 @@ final class CityMapRenderer {
 
   void draw(Canvas canvas) {
     CityMapLayout layout = new CityMapLayout(view.H / view.scale);
+    Expedition loot = view.game.expeditionController.active(Expedition.Type.LOOT),
+        recon = view.game.expeditionController.active(Expedition.Type.RECON);
+    activeLoot = loot == null ? "" : loot.locationId;
+    activeRecon = recon == null ? "" : recon.locationId;
     drawHeader(canvas);
     rounded(
         canvas, layout.left, layout.top, layout.right, layout.bottom, Color.rgb(19, 28, 37), 14);
     drawDistrict(canvas, layout);
     drawFog(canvas, layout);
+    view.expeditionRenderer.drawRoute(canvas, layout);
     drawShelter(canvas, layout);
     for (MapLocation location : view.cityMap.visibleLocations()) {
       if (location.kind == MapLocation.Kind.DISTRICT)
         view.districtRenderer.marker(canvas, location, layout);
       else drawMarker(canvas, location, layout);
     }
-    view.expeditionRenderer.drawRoute(canvas, layout);
+
     drawLayerControls(canvas);
     text(canvas, "С", 378, layout.top + 23, 9, MUTED, true);
     line(canvas, 381, layout.top + 30, 381, layout.top + 49, 1, MUTED);
@@ -94,11 +91,8 @@ final class CityMapRenderer {
 
   private void drawDistrict(Canvas c, CityMapLayout m) {
     // Roads are city artwork, not expedition routes or travel calculations.
-    road(c, m, 38, .50f, .94f, .50f, .77f, .47f, .64f, .43f, .51f, .48f, .32f, .52f, .02f);
-    road(c, m, 24, .02f, .65f, .22f, .61f, .48f, .66f, .71f, .61f, .98f, .66f);
-    road(c, m, 23, .02f, .39f, .22f, .43f, .47f, .40f, .74f, .37f, .98f, .33f);
-    road(c, m, 17, .24f, .02f, .26f, .18f, .24f, .31f, .20f, .43f, .22f, .61f, .15f, .81f);
-    road(c, m, 17, .76f, .02f, .74f, .18f, .79f, .33f, .72f, .48f, .70f, .62f, .76f, .82f);
+    for (int i = 0; i < CityRoadGeometry.ROADS.length; i++)
+      road(c, m, CityRoadGeometry.WIDTHS[i], CityRoadGeometry.ROADS[i]);
     // Broken lane markings and cratered junctions.
     for (int i = 0; i < 12; i++) {
       float y = m.y(.05f + i * .065f), x = m.x(.50f - (i > 5 ? .035f : 0));
@@ -111,7 +105,8 @@ final class CityMapRenderer {
       line(c, x - 10, y + 7, x - 5, y + 2, 1, Color.rgb(65, 72, 76));
       line(c, x - 5, y + 2, x + 1, y + 6, 1, Color.rgb(65, 72, 76));
     }
-    for (int i = 0; i < BLOCKS.length; i++) drawRuin(c, m, BLOCKS[i], i);
+    for (int i = 0; i < CityRoadGeometry.BLOCKS.length; i++)
+      drawRuin(c, m, CityRoadGeometry.BLOCKS[i], i);
     glow(c, m.x(.48f), m.y(.82f), 37, Color.argb(72, 211, 151, 80));
     glow(c, m.x(.22f), m.y(.61f), 23, Color.argb(45, 228, 147, 65));
     glow(c, m.x(.73f), m.y(.37f), 21, Color.argb(34, 112, 172, 210));
@@ -200,12 +195,17 @@ final class CityMapRenderer {
     centered(c, "БЕЗОПАСНАЯ ТОЧКА", x, y + 36, 7, SAFE, false);
   }
 
+  private boolean activeTarget(String id) {
+    return activeLoot.equals(id) || activeRecon.equals(id);
+  }
+
   private void drawMarker(Canvas c, MapLocation location, CityMapLayout m) {
     float x = m.x(location.mapX), y = m.y(location.mapY);
     boolean locked = location.isLocked(),
         selected =
             view.cityMap.selected() == location
-                || view.cityMap.focusedLocationId.equals(location.id);
+                || view.cityMap.focusedLocationId.equals(location.id)
+                || activeTarget(location.id);
     int outline = locked ? Color.rgb(104, 128, 145) : WARM;
     if (selected) glow(c, x, y, 31, Color.argb(85, 222, 153, 72));
     fill(c, locked ? Color.rgb(28, 42, 54) : Color.rgb(35, 44, 52));
@@ -338,7 +338,11 @@ final class CityMapRenderer {
   private java.util.List<String> locationLines(MapLocation location) {
     java.util.List<String> lines = new java.util.ArrayList<>();
     if (location.kind == MapLocation.Kind.STORY) {
-      if (StoryInvestigationConfig.target(location.id)) {
+      if (StoryFactionConfig.target(location.id) != null) {
+        lines.add(
+            "ГОРОД РАСКОЛОТ · " + view.game.storyController.factions.description(location.id));
+        lines.add(view.game.storyController.factions.reason(location.id));
+      } else if (StoryInvestigationConfig.target(location.id)) {
         lines.add("ПОСЛЕДНИЙ СИГНАЛ · Следы прошлого");
         lines.add(view.game.storyController.investigation.objective());
         lines.add(view.game.storyController.investigation.description(location.id));

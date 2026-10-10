@@ -50,7 +50,8 @@ final class StoryRenderer {
     prepare();
     boolean compact =
         view.storyPanel.mode == StoryPanelController.Mode.MESSAGE
-            && StoryInvestigationConfig.dialogue(view.storyPanel.messageId) != null;
+            && (StoryInvestigationConfig.dialogue(view.storyPanel.messageId) != null
+                || StoryFactionConfig.dialogue(view.storyPanel.messageId) != null);
     return new StoryPanelLayout(
         view.H / view.scale, view.storyPanel.choiceMode(), compact ? total : -1);
   }
@@ -80,7 +81,7 @@ final class StoryRenderer {
     view.box(c, 0, 0, 420, view.H / view.scale - 80, Color.argb(220, 5, 10, 15), 0);
     view.box(c, 18, l.top, 402, l.bottom, view.panel, 16);
     view.bold(c, p.title(), 32, l.top + 32, 14, view.accent);
-    view.txt(c, "STORY 1.2 · локальная кампания", 32, l.top + 50, 10, view.muted);
+    view.txt(c, "STORY 1.3 · локальная кампания", 32, l.top + 50, 10, view.muted);
     c.save();
     c.clipRect(view.sy(28), view.sy(l.contentTop), view.sy(392), view.sy(l.contentBottom));
     for (int i = 0; i < lines.size(); i++) {
@@ -123,11 +124,13 @@ final class StoryRenderer {
     view.box(c, 18, y, 402, y + 56, view.panel2, 10);
     view.bold(
         c,
-        view.game.story.investigation != StoryInvestigationController.Phase.DORMANT
-            ? "СЛЕДЫ ПРОШЛОГО · сообщение"
-            : view.game.story.voicesStage > 0
-                ? "ГОЛОСА В ЭФИРЕ · сообщение"
-                : "ПОСЛЕДНИЙ СИГНАЛ · сообщение",
+        view.game.story.factions.started
+            ? "ГОРОД РАСКОЛОТ · сообщение"
+            : view.game.story.investigation != StoryInvestigationController.Phase.DORMANT
+                ? "СЛЕДЫ ПРОШЛОГО · сообщение"
+                : view.game.story.voicesStage > 0
+                    ? "ГОЛОСА В ЭФИРЕ · сообщение"
+                    : "ПОСЛЕДНИЙ СИГНАЛ · сообщение",
         30,
         y + 22,
         12,
