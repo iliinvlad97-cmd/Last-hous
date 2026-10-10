@@ -26,7 +26,8 @@ public class RegressionProbe {
   public double nextDouble(){return roll;}
  }
  static GameView fresh(int w,int h){View.width=w;View.height=h;Context.preferences=new MemoryPreferences();return load();}
- static GameView load(){GameView v=new GameView(new Context());v.game.rnd=new Fixed(.99,2);draw(v);return v;}
+ static long frameNanos;
+ static GameView load(){frameNanos=0;GameView v=new GameView(new Context(),new MockOnlineWorldRepository(),()->frameNanos);v.game.rnd=new Fixed(.99,2);draw(v);return v;}
  static GameView kill(){TreeMap<String,Object> disk=new TreeMap<>(Context.preferences.values);Context.preferences=new MemoryPreferences();Context.preferences.values.putAll(disk);return load();}
  static Canvas draw(GameView v){Canvas c=new Canvas();v.onDraw(c);return c;}
  static void text(Canvas c,String s){require(c.commands.stream().anyMatch(x->x.contains(s)),"drawn: "+s);}
@@ -138,7 +139,7 @@ public class RegressionProbe {
    v.onTouchEvent(new MotionEvent(180*v.scale,(y-72)*v.scale,MotionEvent.ACTION_UP));
    require(overflow?v.cityMap.panelScroll>0:v.cityMap.panelScroll==0,"drag scroll respects actual result viewport");text(draw(v),"ВЕРНУТЬСЯ В УБЕЖИЩЕ");
    tap(v,180,map.panelBottom-40);require(e(v).state()==Expedition.State.RETURNING,"button reachable while scrolled");
-   draw(v);float old=v.cityMap.displayProgress;v.game.advanceMinute();draw(v);require(v.cityMap.displayProgress<old,"return marker moves toward shelter");
+   draw(v);float old=v.cityMap.displayProgress;v.game.advanceMinute();draw(v);frameNanos+=16_000_000L;draw(v);require(v.cityMap.displayProgress<old,"return marker moves toward shelter");
    v.game.paused=true;float frozen=v.cityMap.displayProgress;draw(v);close(v.cityMap.displayProgress,frozen,"paused reverse marker freezes");
   }
   View.width=420;View.height=840;Context.preferences=new MemoryPreferences();Context.preferences.edit().putInt("day",7).putInt("count",1).putString("p0_id","old").putString("p0_job","Экспедиция").putInt("exp2_schema",1).putInt("exp2_count",1).putString("exp2_0_location","shop").putString("exp2_0_participants","old").putString("exp2_0_state","AT_LOCATION").putString("exp2_0_departure","9100").putInt("exp2_0_duration",45).putInt("exp2_0_elapsed",45).apply();

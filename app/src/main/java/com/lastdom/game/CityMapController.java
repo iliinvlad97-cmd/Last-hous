@@ -110,6 +110,7 @@ final class CityMapController {
   int page;
   boolean expeditionPanel, eventPanel;
   float displayProgress, reconDisplayProgress;
+  private final float[] routeTouchPoint = new float[2];
   boolean districtsLayer;
   String districtFilterId = "", expeditionId = "", focusedLocationId = "";
   private final java.util.Set<String> shownReports = new java.util.HashSet<>();
@@ -500,10 +501,9 @@ final class CityMapController {
       if (route == null) continue;
       MapLocation target = game.expeditionController.location(route.locationId);
       float progress = type == Expedition.Type.RECON ? reconDisplayProgress : displayProgress;
-      float[][] routePoints = routes.route(target, visibleLocations(), layout);
-      float[] point = CityRoutePlanner.point(routePoints, progress, layout.bottom - layout.top);
-      if (point == null) continue;
-      if (layout.hits(x, y, point[0], point[1])) {
+      CityRouteGeometry geometry = routes.geometry(target, visibleLocations(), layout);
+      if (!geometry.point(progress, routeTouchPoint)) continue;
+      if (layout.hits(x, y, routeTouchPoint[0], routeTouchPoint[1])) {
         openExpedition(route);
         return TouchResult.CONSUMED;
       }

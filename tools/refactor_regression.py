@@ -73,13 +73,17 @@ public class Handler {
     "android/view/View.java": r'''
 package android.view;
 public class View {
+ public static final int VISIBLE=0, INVISIBLE=4, GONE=8;
  public static int width=420,height=840;
  private final android.content.Context context;
  public View(android.content.Context c){context=c;}
  public android.content.res.Resources getResources(){return context.getResources();}
  public int getWidth(){return width;} public int getHeight(){return height;}
- public void invalidate(){} public void postInvalidateOnAnimation(){} public void postInvalidateDelayed(long delay){}
+ public int animationRequests;
+ public void invalidate(){} public void postInvalidateOnAnimation(){animationRequests++;} public void postInvalidateDelayed(long delay){}
  protected void onDraw(android.graphics.Canvas c){}
+ protected void onWindowVisibilityChanged(int visibility){}
+ public void onWindowFocusChanged(boolean focused){}
  public boolean onTouchEvent(MotionEvent e){return false;}
 }
 ''',

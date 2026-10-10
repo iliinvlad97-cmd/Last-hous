@@ -33,6 +33,8 @@ public class RegressionProbe {
   String before=save(v);require(!v.game.expeditionController.start(location,ids).isEmpty(),message);
   require(before.equals(save(v)),"failed launch atomic: "+message);require(v.game.expeditions.isEmpty(),"no partial expedition");
  }
+ static long animationNanos;
+ static GameView animatedFresh(int w,int h){View.width=w;View.height=h;Context.preferences=new MemoryPreferences();animationNanos=0;GameView v=new GameView(new Context(),new MockOnlineWorldRepository(),()->animationNanos);v.game.rnd=new Random(){public double nextDouble(){return .99;}public int nextInt(int n){return n-1;}};draw(v);return v;}
  static void prepare(GameView v,int index){
   nav(v,2);CityMapLayout m=new CityMapLayout(v.H/v.scale);MapLocation target=v.cityMap.locations.get(index);
   tap(v,m.x(target.mapX),m.y(target.mapY));require(v.cityMap.selected()==target,"selected location");
@@ -53,7 +55,7 @@ public class RegressionProbe {
  }
  public static void main(String[] args){
   for(int w:new int[]{420,840})for(int logicalHeight:new int[]{640,840,1200}){
-   GameView v=fresh(w,logicalHeight*w/420);GameController g=v.game;
+   GameView v=animatedFresh(w,logicalHeight*w/420);GameController g=v.game;
    prepare(v,0);send(v);require(g.expeditions.isEmpty(),"empty squad blocked");text(draw(v),"Выберите от 1 до 3 жителей");
    for(int i=0;i<3;i++)row(v,i);row(v,3);require(v.cityMap.selectedIds.size()==3,"fourth selection blocked");
    text(draw(v),"не более 3 жителей");row(v,1);require(v.cityMap.selectedIds.size()==2,"deselect");row(v,1);
@@ -94,7 +96,7 @@ public class RegressionProbe {
     require(Context.preferences.getInt("exp2_0_elapsed",-1)==e.elapsedMinutes(),"travel persisted every game minute");
    }
    draw(v);float progress=v.cityMap.displayProgress;
-   Canvas route=new Canvas();v.expeditionRenderer.drawRoute(route,m);
+   animationNanos+=16_000_000L;Canvas route=new Canvas();v.expeditionRenderer.drawRoute(route,m);
    float[] center=marker(route),point=CityRoutePlanner.point(v.cityMap.routes.route(g.cityLocations.get(0),v.cityMap.visibleLocations(),m),v.cityMap.displayProgress,m.bottom-m.top);
    close(center[0],m.x(point[0])*v.scale,"marker X matches map transform");close(center[1],m.y(point[1])*v.scale,"marker Y matches map transform");
    require(v.cityMap.displayProgress>progress&&v.cityMap.displayProgress<e.progress(),"visual movement interpolated");

@@ -12,10 +12,22 @@ final class ExpeditionRenderer {
   private final float[][][] pathPoints = new float[2][][];
   private final float[] pathScale = new float[2];
   private final Expedition[] displayed = new Expedition[2];
-  private final Expedition.State[] displayedState = new Expedition.State[2];
+  private final ExpeditionMarkerAnimation[] animations = {
+    new ExpeditionMarkerAnimation(), new ExpeditionMarkerAnimation()
+  };
+  private final float[] markerPoint = new float[2];
+  private final java.util.function.LongSupplier clock;
 
-  ExpeditionRenderer(GameView view) {
+  ExpeditionRenderer(GameView view, java.util.function.LongSupplier clock) {
     this.view = view;
+    this.clock = clock;
+  }
+
+  void leave() {
+    for (int i = 0; i < displayed.length; i++) {
+      displayed[i] = null;
+      animations[i].clear();
+    }
   }
 
   void drawRoute(Canvas c, CityMapLayout layout) {
@@ -25,7 +37,7 @@ final class ExpeditionRenderer {
         drawRoute(c, layout, e);
       } else {
         displayed[type.ordinal()] = null;
-        displayedState[type.ordinal()] = null;
+        animations[type.ordinal()].clear();
         if (type == Expedition.Type.RECON) view.cityMap.reconDisplayProgress = 0;
         else view.cityMap.displayProgress = 0;
       }
@@ -43,22 +55,27 @@ final class ExpeditionRenderer {
     float left = layout.expeditionLeft(expedition.type, parallel),
         right = layout.expeditionRight(expedition.type, parallel);
     MapLocation target = view.game.expeditionController.location(expedition.locationId);
-    if (displayed[index] != expedition || displayedState[index] != expedition.state()) {
+    if (displayed[index] != expedition) {
       displayed[index] = expedition;
-      displayedState[index] = expedition.state();
-      if (recon) view.cityMap.reconDisplayProgress = expedition.routeProgress();
-      else view.cityMap.displayProgress = expedition.routeProgress();
+      animations[index].clear();
     }
-    float progress = recon ? view.cityMap.reconDisplayProgress : view.cityMap.displayProgress;
-    if (!view.game.paused && !view.game.event && !view.game.gameOver) {
-      progress += (expedition.routeProgress() - progress) * .2f;
-      if (Math.abs(progress - expedition.routeProgress()) < .0001f)
-        progress = expedition.routeProgress();
-      else view.postInvalidateOnAnimation();
-    }
+    float progress =
+        animations[index].frame(
+            expedition.routeProgress(),
+            expedition.state() == Expedition.State.RETURNING,
+            view.game.paused
+                || view.game.event
+                || view.game.gameOver
+                || !view.cityAnimationAllowed(),
+            clock.getAsLong());
+    if (animations[index].moving()
+        && view.game.screen == GameView.CITY_MAP
+        && view.cityAnimationAllowed()) view.postInvalidateOnAnimation();
     if (recon) view.cityMap.reconDisplayProgress = progress;
     else view.cityMap.displayProgress = progress;
-    float[][] points = view.cityMap.routes.route(target, view.cityMap.visibleLocations(), layout);
+    CityRouteGeometry geometry =
+        view.cityMap.routes.geometry(target, view.cityMap.visibleLocations(), layout);
+    float[][] points = geometry.points;
     if (points.length > 0) {
       if (pathPoints[index] != points || pathScale[index] != view.scale) {
         pathPoints[index] = points;
@@ -75,8 +92,8 @@ final class ExpeditionRenderer {
       paint.setColor(color);
       c.drawPath(routePaths[index], paint);
       paint.setStyle(Paint.Style.FILL);
-      float[] point = CityRoutePlanner.point(points, progress, layout.bottom - layout.top);
-      float x = layout.x(point[0]), y = layout.y(point[1]);
+      geometry.point(progress, markerPoint);
+      float x = layout.x(markerPoint[0]), y = layout.y(markerPoint[1]);
       paint.setColor(view.bg);
       c.drawCircle(view.sy(x), view.sy(y), view.sy(14), paint);
       paint.setColor(color);

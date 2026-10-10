@@ -63,7 +63,8 @@ public final class GameView extends View {
   final DistrictRenderer districtRenderer = new DistrictRenderer(this);
   final ReconReportRenderer reconReportRenderer = new ReconReportRenderer(this);
   final CityMapRenderer cityMapRenderer = new CityMapRenderer(this);
-  final ExpeditionRenderer expeditionRenderer = new ExpeditionRenderer(this);
+  final ExpeditionRenderer expeditionRenderer;
+  private boolean cityWindowVisible = true, cityWindowFocused = true;
   final ExpeditionEventRenderer expeditionEventRenderer = new ExpeditionEventRenderer(this);
   final ExpeditionPreparationRenderer expeditionPreparationRenderer =
       new ExpeditionPreparationRenderer(this);
@@ -82,6 +83,7 @@ public final class GameView extends View {
     shelterBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.shelter_clean);
     fullSceneBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.shelter_full_scene);
     game = new GameController(context.getSharedPreferences("save_v02", 0), this::invalidate);
+    expeditionRenderer = new ExpeditionRenderer(this, clock);
     cityMap = new CityMapController(game);
     onlineWorld = new OnlineWorldController(repository, clock);
     onlineWorldRenderer = new OnlineWorldRenderer(this);
@@ -132,6 +134,7 @@ public final class GameView extends View {
 
   @Override
   protected void onDraw(Canvas c) {
+    if (game.screen != CITY_MAP) expeditionRenderer.leave();
     W = getWidth();
     H = getHeight();
     scale = W / 420f;
@@ -163,6 +166,24 @@ public final class GameView extends View {
     if (storyPanel.open && !game.event && !game.gameOver && !defensePanel.open)
       storyRenderer.draw(c);
     if (game.gameOver) overlayRenderer.drawGameOver(c);
+  }
+
+  boolean cityAnimationAllowed() {
+    return cityWindowVisible && cityWindowFocused;
+  }
+
+  @Override
+  protected void onWindowVisibilityChanged(int visibility) {
+    super.onWindowVisibilityChanged(visibility);
+    cityWindowVisible = visibility == View.VISIBLE;
+    if (expeditionRenderer != null) expeditionRenderer.leave();
+  }
+
+  @Override
+  public void onWindowFocusChanged(boolean hasWindowFocus) {
+    super.onWindowFocusChanged(hasWindowFocus);
+    cityWindowFocused = hasWindowFocus;
+    if (expeditionRenderer != null) expeditionRenderer.leave();
   }
 
   void wrap(Canvas c, String s, float x, float y, float max, float size, int col, float step) {
@@ -229,6 +250,7 @@ public final class GameView extends View {
       game.save();
     }
     if (previousScreen == ONLINE_WORLD && game.screen != ONLINE_WORLD) onlineWorld.leave();
+    if (previousScreen == CITY_MAP && game.screen != CITY_MAP) expeditionRenderer.leave();
     invalidate();
     return true;
   }
@@ -237,11 +259,7 @@ public final class GameView extends View {
   public boolean onTouchEvent(MotionEvent e) {
     if (storyPanel.open && !game.event && !game.gameOver && !defensePanel.open) {
       storyPanel.touch(
-          e.getAction(),
-          e.getX() / scale,
-          e.getY() / scale,
-          storyRenderer.layout(),
-          storyRenderer);
+          e.getAction(), e.getX() / scale, e.getY() / scale, storyRenderer.layout(), storyRenderer);
       invalidate();
       return true;
     }
