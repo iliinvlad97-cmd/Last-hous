@@ -87,6 +87,7 @@ final class CityMapController {
                     MapLocation.State.LOCKED)));
     points.addAll(ExplorationConfig.destinations());
     points.add(StoryConfig.location());
+    points.addAll(StoryInvestigationConfig.locations());
     return Collections.unmodifiableList(points);
   }
 
@@ -208,6 +209,9 @@ final class CityMapController {
       visible.addAll(locations);
       MapLocation story = game.expeditionController.location(StoryConfig.RADIO);
       if (!story.isLocked()) visible.add(story);
+      for (MapLocation point : game.cityLocations)
+        if (StoryInvestigationConfig.target(point.id)
+            && game.storyController.investigation.visible(point.id)) visible.add(point);
     } else {
       CityDistrict d = game.explorationController.district(districtFilterId);
       if (d != null && d.state == CityDistrict.State.EXPLORED)
@@ -302,7 +306,7 @@ final class CityMapController {
       return;
     }
     if (selected.kind == MapLocation.Kind.STORY) {
-      message = game.storyController.expeditionReason();
+      message = game.storyController.expeditionReason(selected.id);
       if (!message.isEmpty()) return;
     }
     if (selected.kind != MapLocation.Kind.DISTRICT

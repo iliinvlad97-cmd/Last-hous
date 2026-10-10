@@ -2,7 +2,9 @@ package com.lastdom.game;
 
 import java.util.*;
 
-/** Only chapter one's first chain is playable; future chapters/endings are metadata. */
+/**
+ * Stable original campaign definitions; chapter-two investigation extends these via configuration.
+ */
 final class StoryConfig {
   static final int START_DAY = 3, DECODE_MINUTES = 60;
   static final String RADIO = "story.old_radio", CARRIER = "damaged_data_carrier";

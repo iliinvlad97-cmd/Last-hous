@@ -76,7 +76,7 @@ final class ExpeditionController {
       if (target == null || target.kind == MapLocation.Kind.DISTRICT || target.isLocked())
         return "Район не исследован";
       if (target.kind == MapLocation.Kind.STORY) {
-        String reason = game.storyController.expeditionReason();
+        String reason = game.storyController.expeditionReason(target.id);
         if (!reason.isEmpty()) return reason;
       }
       if (target.depleted()) return "Локация истощена";

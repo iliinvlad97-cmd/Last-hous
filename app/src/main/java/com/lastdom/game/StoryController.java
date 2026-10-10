@@ -5,10 +5,12 @@ final class StoryController {
   final GameController game;
   final StoryState state;
   boolean prompt;
+  final StoryInvestigationController investigation;
 
   StoryController(GameController game) {
     this.game = game;
     state = game.story;
+    investigation = new StoryInvestigationController(this);
   }
 
   boolean busy(Resident r) {
@@ -25,6 +27,7 @@ final class StoryController {
     state.reset();
     prompt = false;
     syncMap();
+    investigation.syncMap();
   }
 
   void restore() {
@@ -37,6 +40,7 @@ final class StoryController {
       } else r.job = "Расшифровка";
     }
     activateVoices();
+    investigation.activate();
     prompt = !state.pendingMessage.isEmpty();
   }
 
@@ -49,7 +53,7 @@ final class StoryController {
     m.setDepletion(0);
   }
 
-  private void message(StoryEvent e) {
+  void message(StoryEvent e) {
     if (!state.messages.contains(e.id)) state.messages.add(e.id);
     state.pendingMessage = e.id;
     prompt = true;
@@ -57,6 +61,7 @@ final class StoryController {
 
   void advanceMinute() {
     startVoices();
+    investigation.advanceMinute();
     if (state.phase == StoryState.Phase.DORMANT
         && game.day >= StoryConfig.START_DAY
         && generatorAvailable()
@@ -257,11 +262,13 @@ final class StoryController {
       } else if (d == StoryDialogue.HOOK) {
         state.voicesStage = 6;
         game.addLog(
-            "Сюжет: «Голоса в эфире» завершено. Зацепка — архив станции 17; продолжение пока"
-                + " недоступно.");
+            "Сюжет: «Голоса в эфире» завершено. Зацепка — архив станции 17; Ева готова передать"
+                + " дальнейшие сведения.");
       }
+      investigation.dialogueComplete(d);
+      if (d == StoryDialogue.HOOK) investigation.start();
       if (next != null) message(next.event);
-      else prompt = false;
+      else prompt = !state.pendingMessage.isEmpty();
     }
     game.save();
     game.invalidate();
@@ -269,12 +276,21 @@ final class StoryController {
   }
 
   void research(Expedition e, boolean early) {
+    if (StoryInvestigationConfig.target(e.locationId)) {
+      investigation.research(e, early);
+      return;
+    }
     if (!StoryConfig.RADIO.equals(e.locationId) || state.attemptResults.containsKey(e.id)) return;
     boolean success = !early && game.rnd.nextDouble() < StoryConfig.recoveryChance(game, e);
     state.attemptResults.put(e.id, success);
   }
 
   String expeditionReason() {
+    return expeditionReason(StoryConfig.RADIO);
+  }
+
+  String expeditionReason(String id) {
+    if (StoryInvestigationConfig.target(id)) return investigation.reason(id);
     if (!state.flags.contains(StoryFlags.SIGNAL)) return "Сигнал ещё не получен";
     if (state.items.contains(StoryConfig.CARRIER))
       return "Носитель уже доставлен. Откройте раздел «Сюжет»";

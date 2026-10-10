@@ -8,7 +8,7 @@ final class StoryRepository {
   static final String P = "story1_";
 
   static void save(StoryState s, SharedPreferences.Editor e) {
-    e.putInt(P + "schema", 2)
+    e.putInt(P + "schema", 3)
         .putString(P + "phase", s.phase.name())
         .putString(P + "chapter", s.chapterId)
         .putString(P + "quest", s.questId)
@@ -19,6 +19,9 @@ final class StoryRepository {
         .putString(P + "ending", s.ending.name())
         .putInt(P + "elapsed", s.decodeElapsed)
         .putString(P + "start", Long.toString(s.decodeStart));
+    e.putString(P + "investigation", s.investigation.name())
+        .putString(P + "investigationDecision", s.investigationDecision)
+        .putBoolean(P + "entranceInspected", s.entranceInspected);
     put(e, "flags", s.flags);
     put(e, "objectives", s.objectives);
     put(e, "items", s.items);
@@ -80,6 +83,14 @@ final class StoryRepository {
     get(p, "messages", s.messages);
     s.messages.removeIf(id -> StoryConfig.event(id) == null);
     if (StoryConfig.event(s.pendingMessage) == null) s.pendingMessage = "";
+    try {
+      s.investigation =
+          StoryInvestigationController.Phase.valueOf(p.getString(P + "investigation", "DORMANT"));
+    } catch (IllegalArgumentException ignored) {
+      s.investigation = StoryInvestigationController.Phase.DORMANT;
+    }
+    s.investigationDecision = p.getString(P + "investigationDecision", "");
+    s.entranceInspected = p.getBoolean(P + "entranceInspected", false);
     s.voicesStage = Math.max(0, Math.min(6, p.getInt(P + "voicesStage", 0)));
     s.evaTrust = Math.max(0, Math.min(100, p.getInt(P + "evaTrust", 50)));
     get(p, "completedDialogues", s.completedDialogues);

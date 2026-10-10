@@ -8,7 +8,7 @@ import android.view.*;
 /** Canvas host, drawing primitives, original touch routing and one-second Handler loop. */
 public final class GameView extends View {
   static final int HOME = 0, CITY_MAP = 5, ONLINE_WORLD = 6;
-  static final String VERSION_LABEL = "v1.1.1 • THE LAST SIGNAL • STORY 1.1.1";
+  static final String VERSION_LABEL = "v1.1.1 • THE LAST SIGNAL • STORY 1.2";
   Paint p = new Paint(3), stroke = new Paint(3);
   Bitmap shelterBitmap, fullSceneBitmap;
   Handler timer = new Handler();
@@ -240,7 +240,7 @@ public final class GameView extends View {
           e.getAction(),
           e.getX() / scale,
           e.getY() / scale,
-          new StoryPanelLayout(H / scale, storyPanel.choiceMode()),
+          storyRenderer.layout(),
           storyRenderer);
       invalidate();
       return true;

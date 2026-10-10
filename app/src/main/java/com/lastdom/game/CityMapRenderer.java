@@ -303,9 +303,11 @@ final class CityMapRenderer {
       ExplorationConfig.District owner = ExplorationConfig.owner(location.id);
       lines.add(
           0,
-          owner == null
-              ? "Исследуйте ближайшие районы, чтобы открыть путь."
-              : "Сначала исследуйте: " + owner.name);
+          StoryInvestigationConfig.target(location.id)
+              ? view.game.storyController.investigation.reason(location.id)
+              : owner == null
+                  ? "Исследуйте ближайшие районы, чтобы открыть путь."
+                  : "Сначала исследуйте: " + owner.name);
       MapPanelContent.draw(view, c, m, lines);
       rounded(c, 34, m.panelBottom - 66, 386, m.panelBottom - 24, Color.rgb(44, 59, 72), 10);
       centered(c, "ЗАКРЫТЬ", 210, m.panelBottom - 40, 11, INK, true);
@@ -336,10 +338,18 @@ final class CityMapRenderer {
   private java.util.List<String> locationLines(MapLocation location) {
     java.util.List<String> lines = new java.util.ArrayList<>();
     if (location.kind == MapLocation.Kind.STORY) {
-      lines.add("ПОСЛЕДНИЙ СИГНАЛ · Неизвестная частота");
-      lines.add(view.game.storyController.objective());
-      lines.add("Носитель будет получен только после возвращения отряда.");
-      lines.add("Неудачную попытку можно повторить; истощение не блокирует сюжет.");
+      if (StoryInvestigationConfig.target(location.id)) {
+        lines.add("ПОСЛЕДНИЙ СИГНАЛ · Следы прошлого");
+        lines.add(view.game.storyController.investigation.objective());
+        lines.add(view.game.storyController.investigation.description(location.id));
+        String reason = view.game.storyController.investigation.reason(location.id);
+        if (!reason.isEmpty()) lines.add(reason);
+      } else {
+        lines.add("ПОСЛЕДНИЙ СИГНАЛ · Неизвестная частота");
+        lines.add(view.game.storyController.objective());
+        lines.add("Носитель будет получен только после возвращения отряда.");
+        lines.add("Неудачную попытку можно повторить; истощение не блокирует сюжет.");
+      }
     }
     lines.add("Добыча: " + location.loot);
     lines.add("Расстояние: " + location.distance.label);

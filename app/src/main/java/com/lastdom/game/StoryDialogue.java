@@ -110,6 +110,6 @@ final class StoryDialogue {
 
   static StoryDialogue find(String id) {
     for (StoryDialogue d : ALL) if (d.event.id.equals(id)) return d;
-    return null;
+    return StoryInvestigationConfig.dialogue(id);
   }
 }

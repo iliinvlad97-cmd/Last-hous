@@ -9,7 +9,8 @@ final class StoryPanelController {
     JOURNAL,
     MESSAGE,
     SPECIALIST,
-    CHOICE
+    CHOICE,
+    INVESTIGATION_CHOICE
   }
 
   static final class Row {
@@ -60,6 +61,7 @@ final class StoryPanelController {
 
   void showJournal() {
     view.game.storyController.activateVoices();
+    view.game.storyController.investigation.activate();
     open = true;
     mode = Mode.JOURNAL;
     scroll = 0;
@@ -86,7 +88,7 @@ final class StoryPanelController {
   }
 
   boolean choiceMode() {
-    return mode == Mode.CHOICE;
+    return mode == Mode.CHOICE || mode == Mode.INVESTIGATION_CHOICE;
   }
 
   String title() {
@@ -94,7 +96,9 @@ final class StoryPanelController {
         ? "РАДИОПЕРЕГОВОРЫ"
         : mode == Mode.SPECIALIST
             ? "РАСШИФРОВКА"
-            : mode == Mode.CHOICE ? "СУДЬБА КООРДИНАТ" : "СЮЖЕТ · ПОСЛЕДНИЙ СИГНАЛ";
+            : mode == Mode.INVESTIGATION_CHOICE
+                ? "СУДЬБА ДОКУМЕНТОВ"
+                : mode == Mode.CHOICE ? "СУДЬБА КООРДИНАТ" : "СЮЖЕТ · ПОСЛЕДНИЙ СИГНАЛ";
   }
 
   void row(String text) {
@@ -156,6 +160,22 @@ final class StoryPanelController {
                 r.id,
                 reason.isEmpty()));
       }
+    } else if (mode == Mode.INVESTIGATION_CHOICE) {
+      row(
+          "Гермодверь остаётся закрытой. Решение о документах не заменяет ваш первый выбор; оба"
+              + " пути позволяют продолжить кампанию.");
+      rows.add(
+          new Row(
+              (choiceId.equals(StoryInvestigationConfig.SHARE) ? "✓ " : "")
+                  + "Поделиться найденными документами с выжившими",
+              StoryInvestigationConfig.SHARE,
+              true));
+      rows.add(
+          new Row(
+              (choiceId.equals(StoryInvestigationConfig.KEEP) ? "✓ " : "")
+                  + "Сохранить информацию для дальнейшего расследования",
+              StoryInvestigationConfig.KEEP,
+              true));
     } else if (mode == Mode.CHOICE) {
       row(
           "Часть координат «Рассвета» восстановлена. Решение сохраняется один раз и пока не"
@@ -164,6 +184,34 @@ final class StoryPanelController {
       for (StoryChoice choice : new StoryChoice[] {StoryConfig.SHARE, StoryConfig.SECRET})
         rows.add(new Row((choiceId.equals(choice.id) ? "✓ " : "") + choice.label, choice.id, true));
     } else {
+      if (s.investigation != StoryInvestigationController.Phase.DORMANT) {
+        row("Глава 2 · СЛЕДЫ ПРОШЛОГО");
+        row(view.game.storyController.investigation.objective());
+        row(
+            "Статус: "
+                + (s.investigation == StoryInvestigationController.Phase.COMPLETE
+                    ? "Выполнено"
+                    : "Выполняется"));
+        for (StoryObjective o : StoryInvestigationConfig.QUEST.objectives)
+          row((s.objectives.contains(o.id) ? "✓ " : "○ ") + o.text);
+        row("НАЙДЕННЫЕ ДОКУМЕНТЫ");
+        for (String item : s.items) {
+          String label = StoryInvestigationConfig.itemLabel(item);
+          if (!label.isEmpty()) row("✓ " + label);
+        }
+        if (s.items.contains(StoryInvestigationConfig.KEY))
+          row(
+              view.game.storyController.investigation.description(
+                  StoryInvestigationConfig.ENTRANCE));
+        if (s.entranceInspected) row("Внешний осмотр выполнен. Внутрь комплекса пройти нельзя.");
+        if (!s.investigationDecision.isEmpty())
+          row(
+              "Решение STORY 1.2: "
+                  + (s.investigationDecision.equals(StoryInvestigationConfig.SHARE)
+                      ? "Поделиться найденными документами с выжившими"
+                      : "Сохранить информацию для дальнейшего расследования"));
+        row("ИСТОРИЯ · первая глава");
+      }
       row("Глава 1 · Последний сигнал");
       if (s.voicesStage == 0) {
         String reason = view.game.storyController.voicesBlockedReason();
@@ -180,7 +228,7 @@ final class StoryPanelController {
           "Поговорить с Евой",
           "Узнать последствия решения",
           "Прочитать зацепку",
-          "Архив станции 17 · продолжение пока недоступно"
+          "«Голоса в эфире» завершено"
         };
         row(goals[s.voicesStage]);
         for (StoryObjective o : StoryConfig.VOICES.objectives)
@@ -256,7 +304,12 @@ final class StoryPanelController {
     if (mode == Mode.JOURNAL
         && !view.game.story.pendingMessage.isEmpty()
         && view.game.story.voicesStage > 0) return "ОТКРЫТЬ РАЗГОВОР";
-    if (mode == Mode.CHOICE) return "ПОДТВЕРДИТЬ РЕШЕНИЕ";
+    if (mode == Mode.CHOICE || mode == Mode.INVESTIGATION_CHOICE) return "ПОДТВЕРДИТЬ РЕШЕНИЕ";
+    if (mode == Mode.JOURNAL
+        && view.game.story.investigation == StoryInvestigationController.Phase.DECISION)
+      return "РЕШИТЬ СУДЬБУ ДОКУМЕНТОВ";
+    if (mode == Mode.JOURNAL && !view.game.storyController.investigation.target().isEmpty())
+      return "К СЮЖЕТНОЙ ЛОКАЦИИ";
     if (mode == Mode.SPECIALIST) return "НАЧАТЬ РАСШИФРОВКУ";
     StoryState.Phase p = view.game.story.phase;
     return p == StoryState.Phase.SEARCHING
@@ -269,6 +322,10 @@ final class StoryPanelController {
   }
 
   boolean primaryEnabled() {
+    if (mode == Mode.INVESTIGATION_CHOICE)
+      return !choiceId.isEmpty()
+          && view.game.story.investigation == StoryInvestigationController.Phase.DECISION
+          && view.game.story.investigationDecision.isEmpty();
     StoryDialogue d = StoryDialogue.find(messageId);
     if (mode == Mode.MESSAGE
         && d != null
@@ -291,6 +348,15 @@ final class StoryPanelController {
   }
 
   void primaryAction() {
+    if (mode == Mode.INVESTIGATION_CHOICE) {
+      result = view.game.storyController.investigation.choose(choiceId, true);
+      if (result.isEmpty()) {
+        showJournal();
+        result = "Решение о документах сохранено. Гермодверь остаётся закрытой.";
+      }
+      refresh();
+      return;
+    }
     if (mode == Mode.CHOICE) {
       result = view.game.storyController.choose(choiceId, true);
       if (result.isEmpty()) {
@@ -326,6 +392,24 @@ final class StoryPanelController {
     }
     if (!view.game.story.pendingMessage.isEmpty() && view.game.story.voicesStage > 0) {
       showMessage(view.game.story.pendingMessage);
+      return;
+    }
+    if (view.game.story.investigation == StoryInvestigationController.Phase.DECISION) {
+      mode = Mode.INVESTIGATION_CHOICE;
+      scroll = 0;
+      choiceId = "";
+      refresh();
+      return;
+    }
+    String destination = view.game.storyController.investigation.target();
+    if (!destination.isEmpty()) {
+      view.cityMap.closeSelection();
+      view.cityMap.districtsLayer = false;
+      view.cityMap.districtFilterId = "";
+      view.cityMap.focusedLocationId = destination;
+      view.game.screen = GameView.CITY_MAP;
+      view.game.overlay = 0;
+      close();
       return;
     }
     switch (view.game.story.phase) {
@@ -395,7 +479,7 @@ final class StoryPanelController {
         response = Integer.parseInt(row.id);
         refresh();
       } else if (mode == Mode.JOURNAL) showMessage(row.id);
-      else if (mode == Mode.CHOICE) {
+      else if (mode == Mode.CHOICE || mode == Mode.INVESTIGATION_CHOICE) {
         choiceId = row.id;
         refresh();
       } else if (mode == Mode.SPECIALIST) {
